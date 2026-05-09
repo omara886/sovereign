@@ -1,45 +1,32 @@
-import asyncio
 import io
+import httpx
 from PIL import Image
-
 from app.config import get_settings
 
 settings = get_settings()
 
 
 async def generate_image_fal(prompt: str, model: str, width: int, height: int) -> bytes:
-    """Generate image via fal.ai API. Falls back to placeholder if FAL_KEY not set."""
-    fal_key = settings.FAL_KEY
-    if not fal_key:
-        return _placeholder_image(width, height)
-
+    """Generate image via fal.ai REST API. Falls back to placeholder if FAL_KEY not set."""
+    if not settings.FAL_KEY:
+        return _placeholder(width, height)
     try:
-        import fal_client
-
-        handler = await asyncio.to_thread(
-            fal_client.run,
-            model,
-            arguments={
-                "prompt": prompt,
-                "image_size": {"width": width, "height": height},
-                "num_inference_steps": 4 if "schnell" in model else 28,
-                "num_images": 1,
-            },
-        )
-        image_url = handler["images"][0]["url"]
-
-        import httpx
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.get(image_url)
-            response.raise_for_status()
-            return response.content
-
+            r = await client.post(
+                f"https://fal.run/{model}",
+                headers={"Authorization": f"Key {settings.FAL_KEY}"},
+                json={"prompt": prompt, "image_size": {"width": width, "height": height}, "num_images": 1},
+            )
+            r.raise_for_status()
+            image_url = r.json()["images"][0]["url"]
+            img_r = await client.get(image_url)
+            img_r.raise_for_status()
+            return img_r.content
     except Exception:
-        return _placeholder_image(width, height)
+        return _placeholder(width, height)
 
 
-def _placeholder_image(width: int, height: int) -> bytes:
-    """Dark slate placeholder with gold border — matches design system."""
+def _placeholder(width: int, height: int) -> bytes:
     img = Image.new("RGB", (width, height), color=(30, 41, 59))
     buf = io.BytesIO()
     img.save(buf, format="PNG")

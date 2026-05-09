@@ -1,7 +1,7 @@
 [phases.setup]
-nixPkgs = ["python312", "gcc"]
+nixPkgs = ["python312"]
 
-[phases.build]
+[phases.install]
 cmds = ["pip install -r backend/requirements.txt"]
 
 [start]
