@@ -27,7 +27,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Sovereign API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.NEXT_PUBLIC_API_URL, "http://localhost:3000"],
+    allow_origins=[
+        "https://frontend-production-9eea5.up.railway.app",
+        "http://localhost:3000",
+        settings.NEXT_PUBLIC_API_URL,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

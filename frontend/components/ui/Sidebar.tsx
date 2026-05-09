@@ -4,11 +4,11 @@ import { usePathname, useRouter } from 'next/navigation'
 import { BarChart3, FolderKanban, Inbox, LayoutDashboard, LogOut, Settings } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { href: '/', icon: LayoutDashboard, labelAr: 'لوحة القيادة' },
-  { href: '/projects', icon: FolderKanban, labelAr: 'المشاريع' },
-  { href: '/inbox', icon: Inbox, labelAr: 'الموافقة' },
-  { href: '/analytics', icon: BarChart3, labelAr: 'التحليلات' },
-  { href: '/settings', icon: Settings, labelAr: 'الإعدادات' },
+  { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/projects', icon: FolderKanban, label: 'Projects' },
+  { href: '/inbox', icon: Inbox, label: 'Inbox' },
+  { href: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 export default function Sidebar() {
@@ -26,16 +26,16 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* ── Desktop sidebar ─────────────────────────────────── */}
-      <aside className="hidden md:flex fixed top-0 right-0 h-screen w-60 flex-col bg-[#0A0A0A] border-l border-[rgba(201,168,76,0.1)] z-40">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex fixed top-0 left-0 h-screen w-60 flex-col bg-[#0A0A0A] border-r border-[rgba(201,168,76,0.1)] z-40">
         <div className="p-6 border-b border-[rgba(201,168,76,0.1)]">
           <span className="font-['Cormorant_Garamond'] text-xl text-[#C9A84C] tracking-widest uppercase">
             Sovereign
           </span>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1" dir="rtl">
-          {NAV_ITEMS.map(({ href, icon: Icon, labelAr }) => (
+        <nav className="flex-1 p-3 space-y-1">
+          {NAV_ITEMS.map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}
               className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 ${
                 isActive(href)
@@ -44,8 +44,8 @@ export default function Sidebar() {
               }`}
             >
               <Icon size={18} className="shrink-0" />
-              <span className="font-['Cairo'] text-sm">{labelAr}</span>
-              {isActive(href) && <span className="mr-auto w-1.5 h-1.5 rounded-full bg-[#C9A84C]" />}
+              <span className="font-['IBM_Plex_Sans'] text-sm">{label}</span>
+              {isActive(href) && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#C9A84C]" />}
             </Link>
           ))}
         </nav>
@@ -53,27 +53,24 @@ export default function Sidebar() {
         <div className="p-3 border-t border-[rgba(201,168,76,0.1)]">
           <button onClick={logout}
             className="flex items-center gap-3 px-3 py-3 rounded-xl w-full text-[rgba(248,246,241,0.4)] hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.05)] transition-all duration-200"
-            dir="rtl"
           >
             <LogOut size={16} className="shrink-0" />
-            <span className="font-['Cairo'] text-sm">خروج</span>
+            <span className="font-['IBM_Plex_Sans'] text-sm">Sign Out</span>
           </button>
         </div>
       </aside>
 
-      {/* ── Mobile bottom tab bar ────────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 md:hidden z-50 bg-[rgba(10,10,10,0.95)] backdrop-blur-xl border-t border-[rgba(201,168,76,0.12)] safe-area-pb">
-        <div className="flex items-center justify-around px-2 py-2">
-          {NAV_ITEMS.slice(0, 4).map(({ href, icon: Icon, labelAr }) => (
+      {/* Mobile bottom tab bar */}
+      <nav className="fixed bottom-0 left-0 right-0 md:hidden z-50 bg-[rgba(10,10,10,0.97)] backdrop-blur-xl border-t border-[rgba(201,168,76,0.12)]">
+        <div className="flex items-center justify-around px-1 py-1">
+          {NAV_ITEMS.slice(0, 4).map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}
-              className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl min-w-[56px] min-h-[56px] justify-center transition-all duration-200 ${
-                isActive(href)
-                  ? 'text-[#C9A84C]'
-                  : 'text-[rgba(248,246,241,0.35)]'
+              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl min-w-[60px] min-h-[52px] justify-center transition-colors duration-200 ${
+                isActive(href) ? 'text-[#C9A84C]' : 'text-[rgba(248,246,241,0.35)]'
               }`}
             >
               <Icon size={22} />
-              <span className="font-['Cairo'] text-[10px] leading-tight">{labelAr}</span>
+              <span className="font-['IBM_Plex_Sans'] text-[10px] leading-tight">{label}</span>
             </Link>
           ))}
         </div>

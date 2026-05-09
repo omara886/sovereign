@@ -25,10 +25,10 @@ export default function LoginPage() {
         router.push('/')
         router.refresh()
       } else {
-        setError('اسم المستخدم أو كلمة المرور غلط')
+        setError('Invalid username or password')
       }
     } catch {
-      setError('في مشكلة — جرب مرة ثانية')
+      setError('Something went wrong — try again')
     } finally {
       setLoading(false)
     }
@@ -37,23 +37,21 @@ export default function LoginPage() {
   return (
     <Aurora className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="text-center mb-10">
           <h1 className="font-['Cormorant_Garamond'] text-5xl text-[#C9A84C] tracking-widest mb-2">
             <BlurText text="Sovereign" delay={100} />
           </h1>
-          <p className="font-['Cairo'] text-sm text-[rgba(248,246,241,0.4)]">
-            مركز التسويق الذاتي
+          <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)]">
+            Autonomous AI Marketing Command Center
           </p>
         </div>
 
-        {/* Card */}
         <div className="rounded-[20px] p-[2px] bg-gradient-to-br from-[rgba(201,168,76,0.15)] to-transparent border border-[rgba(201,168,76,0.15)]">
           <div className="rounded-[18px] bg-[#1E293B] p-8">
-            <form onSubmit={submit} className="space-y-5" dir="rtl">
+            <form onSubmit={submit} className="space-y-5">
               <div>
-                <label className="font-['Cairo'] text-sm text-[rgba(248,246,241,0.6)] block mb-2">
-                  اسم المستخدم
+                <label className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)] block mb-2">
+                  Username
                 </label>
                 <input
                   type="text"
@@ -67,8 +65,8 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="font-['Cairo'] text-sm text-[rgba(248,246,241,0.6)] block mb-2">
-                  كلمة المرور
+                <label className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)] block mb-2">
+                  Password
                 </label>
                 <input
                   type="password"
@@ -82,16 +80,15 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <p className="font-['Cairo'] text-sm text-[#EF4444] text-center">{error}</p>
+                <p className="font-['IBM_Plex_Sans'] text-sm text-[#EF4444] text-center">{error}</p>
               )}
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#C9A84C] hover:bg-[#E8C97A] text-[#0A0A0A] font-['Cairo'] font-bold py-3.5 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-base mt-2"
-                style={{ transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)' }}
+                className="w-full bg-[#C9A84C] hover:bg-[#E8C97A] text-[#0A0A0A] font-['IBM_Plex_Sans'] font-bold py-3.5 rounded-xl transition-all duration-300 disabled:opacity-50 text-base mt-2"
               >
-                {loading ? 'جاري الدخول...' : 'دخول'}
+                {loading ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
           </div>

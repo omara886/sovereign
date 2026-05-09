@@ -9,87 +9,81 @@ import Link from 'next/link'
 import { CheckCircle, Clock, LayoutDashboard, TrendingUp } from 'lucide-react'
 
 const PROJECTS = [
-  { slug: 'therapia', nameAr: 'ثيرابيا', nameEn: 'Therapia', goal: 'تنزيلات التطبيق', status: 'active', pending: 0 },
-  { slug: 'qawwi', nameAr: 'قوي', nameEn: 'Qawwi', goal: 'عملاء B2B', status: 'active', pending: 0 },
-  { slug: 'productbench', nameAr: 'ProductBench', nameEn: 'ProductBench', goal: 'مستخدمين مدفوعين', status: 'active', pending: 0 },
-  { slug: 'sahmalgo', nameAr: 'سهم ألجو', nameEn: 'SahmAlgo', goal: 'متابعين', status: 'active', pending: 0 },
+  { slug: 'therapia', nameEn: 'Therapia', goal: 'App downloads + assessments', status: 'active', pending: 0 },
+  { slug: 'qawwi', nameEn: 'Qawwi', goal: 'B2B leads + demo requests', status: 'active', pending: 0 },
+  { slug: 'productbench', nameEn: 'ProductBench', goal: 'Paying customers', status: 'active', pending: 0 },
+  { slug: 'sahmalgo', nameEn: 'SahmAlgo', goal: 'Followers + signups', status: 'active', pending: 0 },
 ]
 
 export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
-      {/* Hero */}
-      <Aurora className="pt-16 pb-12 px-6 md:px-8">
-        <div dir="rtl" className="max-w-5xl mx-auto">
+      <Aurora className="pt-14 pb-10 px-4 md:px-8">
+        <div className="max-w-5xl mx-auto">
           <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)] mb-2">
-            الأحد، ٩ مايو ٢٠٢٦
+            Sovereign — Week of May 10, 2026
           </p>
           <h1 className="font-['Cormorant_Garamond'] text-4xl md:text-6xl text-[#F8F6F1] mb-2">
-            <BlurText text="مرحبا عمر" delay={100} />
+            <BlurText text="Welcome back, Omar" delay={100} />
           </h1>
-          <p className="font-['Cairo'] text-[rgba(248,246,241,0.5)] text-lg mt-2">
-            Sovereign جاهز — اختار المشروع أو راجع الموافقات
+          <p className="font-['IBM_Plex_Sans'] text-[rgba(248,246,241,0.5)] text-base mt-2">
+            Your marketing runs autonomously. Approve, reject, and review.
           </p>
         </div>
       </Aurora>
 
-      <div className="max-w-5xl mx-auto px-6 md:px-8 pb-32 md:pb-12">
-        {/* Stats row */}
+      <div className="max-w-5xl mx-auto px-4 md:px-8 pb-8">
+        {/* Stats */}
         <AnimatedContent delay={100}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" dir="rtl">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {[
-              { icon: Clock, labelAr: 'بانتظار موافقتك', value: 0, suffix: '' },
-              { icon: CheckCircle, labelAr: 'نُشر هذا الأسبوع', value: 0, suffix: '' },
-              { icon: TrendingUp, labelAr: 'ميزانية مستخدمة', value: 0, prefix: 'SAR ', suffix: '' },
-              { icon: LayoutDashboard, labelAr: 'مشاريع نشطة', value: 4, suffix: '' },
-            ].map(({ icon: Icon, labelAr, value, prefix, suffix }) => (
-              <Card key={labelAr}>
-                <Icon size={18} className="text-[#C9A84C] mb-2" />
+              { icon: Clock, label: 'Pending Approvals', value: 0 },
+              { icon: CheckCircle, label: 'Published This Week', value: 0 },
+              { icon: TrendingUp, label: 'Budget Used (SAR)', value: 0 },
+              { icon: LayoutDashboard, label: 'Active Projects', value: 4 },
+            ].map(({ icon: Icon, label, value }) => (
+              <Card key={label}>
+                <Icon size={16} className="text-[#C9A84C] mb-2" />
                 <p className="font-['IBM_Plex_Mono'] text-2xl text-[#F8F6F1] font-bold">
-                  <CountUp end={value} prefix={prefix} suffix={suffix} />
+                  <CountUp end={value} />
                 </p>
-                <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.4)] mt-1">{labelAr}</p>
+                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-1 leading-snug">{label}</p>
               </Card>
             ))}
           </div>
         </AnimatedContent>
 
-        {/* Project cards */}
+        {/* Projects */}
         <AnimatedContent delay={200}>
-          <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1] mb-4 text-right" dir="rtl">
-            المشاريع
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" dir="rtl">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1]">Projects</h2>
+            <Link href="/inbox" className="font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] hover:underline">
+              View Inbox →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {PROJECTS.map((project, i) => (
-              <AnimatedContent key={project.slug} delay={250 + i * 80}>
+              <AnimatedContent key={project.slug} delay={250 + i * 60}>
                 <SpotlightCard>
                   <Card>
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="font-['Cairo'] text-lg text-[#F8F6F1] font-semibold">{project.nameAr}</h3>
-                        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">{project.nameEn}</p>
+                        <h3 className="font-['IBM_Plex_Sans'] text-base text-[#F8F6F1] font-semibold">{project.nameEn}</h3>
+                        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-0.5">{project.goal}</p>
                       </div>
-                      <Badge variant={project.status === 'active' ? 'success' : 'warning'}>
-                        {project.status === 'active' ? 'نشط' : 'متوقف'}
-                      </Badge>
+                      <Badge variant="success">Active</Badge>
                     </div>
-                    <p className="font-['Cairo'] text-sm text-[rgba(248,246,241,0.5)] mb-4">
-                      الهدف: {project.goal}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/projects/${project.slug}`}
-                        className="flex-1 text-center font-['Cairo'] text-sm bg-[rgba(201,168,76,0.12)] hover:bg-[rgba(201,168,76,0.2)] text-[#C9A84C] border border-[rgba(201,168,76,0.2)] rounded-xl py-2 transition-all duration-300"
-                        style={{ transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)' }}
+                    <div className="flex gap-2 mt-4">
+                      <Link href={`/projects/${project.slug}`}
+                        className="flex-1 text-center font-['IBM_Plex_Sans'] text-sm bg-[rgba(201,168,76,0.08)] hover:bg-[rgba(201,168,76,0.15)] text-[#C9A84C] border border-[rgba(201,168,76,0.2)] rounded-xl py-2.5 transition-all duration-200 min-h-[44px] flex items-center justify-center"
                       >
-                        راجع المشروع
+                        View Project
                       </Link>
                       {project.pending > 0 && (
-                        <Link
-                          href="/inbox"
-                          className="font-['Cairo'] text-sm bg-[#C9A84C] text-[#0A0A0A] rounded-xl py-2 px-4 font-semibold"
+                        <Link href="/inbox"
+                          className="font-['IBM_Plex_Sans'] text-sm bg-[#C9A84C] text-[#0A0A0A] rounded-xl py-2.5 px-4 font-semibold min-h-[44px] flex items-center"
                         >
-                          وافق ({project.pending})
+                          Approve ({project.pending})
                         </Link>
                       )}
                     </div>
@@ -100,19 +94,17 @@ export default function DashboardPage() {
           </div>
         </AnimatedContent>
 
-        {/* Quick approvals preview */}
+        {/* Quick approvals */}
         <AnimatedContent delay={450}>
-          <div className="mt-10" dir="rtl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1]">الموافقات المعلقة</h2>
-              <Link href="/inbox" className="font-['Cairo'] text-sm text-[#C9A84C] hover:underline">
-                عرض الكل ←
-              </Link>
-            </div>
+          <div className="mt-8">
+            <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1] mb-4">Pending Approvals</h2>
             <Card>
-              <p className="font-['Cairo'] text-[rgba(248,246,241,0.4)] text-center py-4">
-                ما في موافقات معلقة — كل شي تمام ✅
-              </p>
+              <div className="flex flex-col items-center py-10 gap-3">
+                <CheckCircle size={32} className="text-[#10B981]" />
+                <p className="font-['IBM_Plex_Sans'] text-[rgba(248,246,241,0.4)] text-center text-sm">
+                  No pending approvals — you&apos;re all caught up.
+                </p>
+              </div>
             </Card>
           </div>
         </AnimatedContent>
