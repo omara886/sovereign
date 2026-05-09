@@ -1,6 +1,37 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-:root{--obsidian:#0A0A0A;--gold:#C9A84C;--gold-light:#E8C97A;--gold-dim:rgba(201,168,76,0.15);--slate:#1E293B;--slate-light:#2D3F55;--off-white:#F8F6F1;--text-primary:#F8F6F1;--text-secondary:rgba(248,246,241,0.6);--success:#10B981;--warning:#F59E0B;--danger:#EF4444}
-body{background:var(--obsidian);color:var(--text-primary);font-family:'IBM Plex Sans',sans-serif}
-.ar{font-family:'Cairo',sans-serif;direction:rtl}
+
+/* Google Fonts — loaded via next/font is preferred but CSS import works for MVP */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600;700&display=swap');
+
+:root {
+  --obsidian: #0A0A0A;
+  --gold: #C9A84C;
+  --gold-light: #E8C97A;
+  --gold-dim: rgba(201, 168, 76, 0.15);
+  --slate: #1E293B;
+  --slate-light: #2D3F55;
+  --off-white: #F8F6F1;
+  --text-primary: #F8F6F1;
+  --text-secondary: rgba(248, 246, 241, 0.6);
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+}
+
+body {
+  background: var(--obsidian);
+  color: var(--text-primary);
+  font-family: 'IBM Plex Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Arabic text class */
+.ar { font-family: 'Cairo', sans-serif; direction: rtl; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(201, 168, 76, 0.2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(201, 168, 76, 0.4); }

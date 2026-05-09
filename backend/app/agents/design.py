@@ -1,8 +1,172 @@
-from app.agents.base import BaseAgent
+import uuid
 
-SYSTEM_PROMPT = "You are the Design Agent for Sovereign. You generate professional marketing visuals using fal.ai."
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.agents.base import BaseAgent
+from app.tools.fal_tools import generate_image_fal
+from app.tools.image_tools import apply_text_overlay, create_thumbnail, resize_image
+from app.tools.memory_tools import get_brand_memory
+from app.tools.r2_tools import upload_to_r2
+
+SYSTEM_PROMPT = """You are the Design Agent for Sovereign. You generate professional marketing visuals using fal.ai.
+
+ALWAYS read BrandMemory first. Brand rules are law.
+
+Image generation process:
+1. Read brand memory (color palette, visual style, image style)
+2. Build a detailed fal.ai prompt encoding brand rules: "No text in image, leave clear space for text overlay. [style description]. Colors: [hex codes]. Professional quality, high resolution."
+3. Choose model: fal-ai/flux-pro for hero/ad creatives, fal-ai/flux/schnell for social posts/stories
+4. Call generate_image with the prompt and platform dimensions
+5. Call apply_text_overlay with the Arabic and English copy
+6. Call resize_for_platform to final dimensions
+7. Call upload_design to R2 storage
+8. Return the design_url and thumbnail_url
+
+Platform dimensions (exact):
+- instagram_post: 1080x1080
+- instagram_story: 1080x1920
+- linkedin_post: 1200x627
+- x_post: 1600x900
+- google_display: 1200x628
+
+Text overlay rules:
+- Arabic text: RTL direction, minimum 48px headline, 28px body
+- Leave 15% padding from edges
+- Contrast minimum 4.5:1 (WCAG AA)
+- Arabic on top (larger), English below (smaller) for bilingual
+
+If brand colors are provisional, use them but note in design_notes: "Colors provisional — approval pending"
+
+Output JSON: {"design_url": "...", "thumbnail_url": "...", "fal_prompt": "...", "model_used": "...", "notes": []}"""
+
+TOOLS = [
+    {
+        "name": "get_brand_memory",
+        "description": "Get brand memory for colors, fonts, visual style",
+        "input_schema": {
+            "type": "object",
+            "properties": {"project_id": {"type": "string"}},
+            "required": ["project_id"],
+        },
+    },
+    {
+        "name": "generate_image",
+        "description": "Generate image using fal.ai",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string"},
+                "model": {"type": "string", "enum": ["fal-ai/flux-pro", "fal-ai/flux/schnell"]},
+                "width": {"type": "integer"},
+                "height": {"type": "integer"},
+            },
+            "required": ["prompt", "model", "width", "height"],
+        },
+    },
+    {
+        "name": "apply_text_and_upload",
+        "description": "Apply text overlay to image bytes and upload to R2. Returns design_url and thumbnail_url.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "image_key": {"type": "string", "description": "Key from generate_image result"},
+                "copy_ar": {"type": "string"},
+                "copy_en": {"type": "string"},
+                "cta_ar": {"type": "string"},
+                "cta_en": {"type": "string"},
+                "asset_id": {"type": "string"},
+            },
+            "required": ["image_key", "asset_id"],
+        },
+    },
+]
+
+_IMAGE_STORE: dict[str, bytes] = {}
+
+PLATFORM_DIMENSIONS = {
+    "instagram_post": (1080, 1080),
+    "instagram_story": (1080, 1920),
+    "linkedin_post": (1200, 627),
+    "x_post": (1600, 900),
+    "google_display": (1200, 628),
+}
 
 
 class DesignAgent(BaseAgent):
     def __init__(self):
-        super().__init__(system_prompt=SYSTEM_PROMPT, tools=[])
+        super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=2048)
+        self.tool_implementations = {
+            "get_brand_memory": self._get_brand_memory,
+            "generate_image": self._generate_image,
+            "apply_text_and_upload": self._apply_text_and_upload,
+        }
+
+    async def _get_brand_memory(self, db: AsyncSession, project_id: str) -> dict:
+        mem = await get_brand_memory(db, project_id)
+        if not mem:
+            return {"error": "not found"}
+        return {
+            "color_palette": mem.color_palette,
+            "typography": mem.typography,
+            "visual_style": mem.visual_style,
+            "image_style": mem.image_style,
+            "brand_voice": mem.brand_voice,
+            "arabic_font_url": mem.arabic_font_url,
+            "is_provisional": mem.is_provisional,
+        }
+
+    async def _generate_image(self, db: AsyncSession, prompt: str, model: str, width: int, height: int) -> dict:
+        image_bytes = await generate_image_fal(prompt, model, width, height)
+        key = str(uuid.uuid4())
+        _IMAGE_STORE[key] = image_bytes
+        return {"image_key": key, "width": width, "height": height}
+
+    async def _apply_text_and_upload(
+        self,
+        db: AsyncSession,
+        image_key: str,
+        asset_id: str,
+        copy_ar: str = "",
+        copy_en: str = "",
+        cta_ar: str = "",
+        cta_en: str = "",
+    ) -> dict:
+        image_bytes = _IMAGE_STORE.get(image_key)
+        if not image_bytes:
+            return {"error": "image_key not found"}
+        text_ar = f"{copy_ar}\n{cta_ar}".strip() if copy_ar or cta_ar else ""
+        text_en = f"{copy_en}\n{cta_en}".strip() if copy_en or cta_en else ""
+        with_text = await apply_text_overlay(image_bytes, text_ar, text_en)
+        thumb = await create_thumbnail(with_text)
+        design_url = await upload_to_r2(with_text, f"{asset_id}.png", "image/png")
+        thumbnail_url = await upload_to_r2(thumb, f"{asset_id}_thumb.png", "image/png")
+        _IMAGE_STORE.pop(image_key, None)
+        return {"design_url": design_url, "thumbnail_url": thumbnail_url}
+
+    async def generate_design(
+        self,
+        db: AsyncSession,
+        project_id: str,
+        asset_id: str,
+        channel: str,
+        copy_ar: str,
+        copy_en: str,
+        cta_ar: str = "",
+        cta_en: str = "",
+    ) -> dict:
+        platform_key = channel.replace("-", "_").replace(" ", "_") + "_post"
+        dims = PLATFORM_DIMENSIONS.get(platform_key, (1080, 1080))
+        msg = (
+            f"Generate a marketing design for project_id={project_id}, asset_id={asset_id}. "
+            f"Channel: {channel}. Platform dimensions: {dims[0]}x{dims[1]}. "
+            f"Arabic copy: {copy_ar[:100]}. English copy: {copy_en[:100]}. "
+            "Steps: (1) get_brand_memory, (2) generate_image with a brand-consistent prompt, "
+            "(3) apply_text_and_upload. Return design_url and thumbnail_url."
+        )
+        result = await self.run(msg, db)
+        import json
+        start = result.find("{")
+        end = result.rfind("}") + 1
+        if start >= 0 and end > start:
+            return json.loads(result[start:end])
+        return {"error": "parse failed", "raw": result}

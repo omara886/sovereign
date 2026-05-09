@@ -35,8 +35,9 @@ class Settings(BaseSettings):
     GOOGLE_ADS_REFRESH_TOKEN: str = ""
     GOOGLE_ANALYTICS_PROPERTY_ID: str = ""
 
-    NEXT_PUBLIC_API_URL: str = ""
+    NEXT_PUBLIC_API_URL: str = "http://localhost:8000"
     API_SECRET_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "sovereign@notifications.ai"
 
 
 @lru_cache
