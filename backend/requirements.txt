@@ -6,6 +6,7 @@ anthropic==0.100.0
 anyio==4.13.0
 APScheduler==3.11.2
 asyncpg==0.31.0
+psycopg2-binary==2.9.10
 asyncstdlib==3.14.0
 beautifulsoup4==4.14.3
 boto3==1.43.6
