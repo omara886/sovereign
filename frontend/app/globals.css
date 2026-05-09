@@ -30,6 +30,19 @@ body {
 /* Arabic text class */
 .ar { font-family: 'Cairo', sans-serif; direction: rtl; }
 
+/* Mobile safe area for bottom tab bar */
+.safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* All pages: bottom padding on mobile so tab bar doesn't cover content */
+main { padding-bottom: 80px; }
+@media (min-width: 768px) { main { padding-bottom: 0; } }
+
+/* Prevent horizontal scroll everywhere */
+* { max-width: 100%; box-sizing: border-box; }
+
+/* Touch targets minimum 44px */
+button, a { min-height: 44px; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
