@@ -1,23 +1,11 @@
+# Railway reads this per-service when Root Directory is set correctly.
+# Backend service: Root Directory = backend
+# Frontend service: Root Directory = frontend
+
 [build]
 builder = "nixpacks"
 
-[[services]]
-name = "sovereign-backend"
-source = "backend"
-
-[services.build]
-buildCommand = "pip install -r requirements.txt"
-
-[services.deploy]
-startCommand = "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+[deploy]
 healthcheckPath = "/health"
-
-[[services]]
-name = "sovereign-frontend"
-source = "frontend"
-
-[services.build]
-buildCommand = "npm ci && npm run build"
-
-[services.deploy]
-startCommand = "npm start"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
