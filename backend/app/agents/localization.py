@@ -2,7 +2,7 @@ import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base import BaseAgent
+from app.agents.base import BaseAgent, HAIKU
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 
 SYSTEM_PROMPT = """You are the Localization Agent for Sovereign. You produce native-quality Arabic and English marketing content.
@@ -65,6 +65,8 @@ TOOLS = [
 
 
 class LocalizationAgent(BaseAgent):
+    MODEL = HAIKU  # translation/rewrite — Haiku handles Arabic well, 5x cheaper
+
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=4096)
         self.tool_implementations = {

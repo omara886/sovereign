@@ -2,7 +2,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base import BaseAgent
+from app.agents.base import BaseAgent, HAIKU
 from app.tools.fal_tools import generate_image_fal
 from app.tools.image_tools import apply_text_overlay, create_thumbnail, resize_image
 from app.tools.memory_tools import get_brand_memory
@@ -93,6 +93,8 @@ PLATFORM_DIMENSIONS = {
 
 
 class DesignAgent(BaseAgent):
+    MODEL = HAIKU  # just builds an fal.ai prompt + calls tools — no deep reasoning needed
+
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=2048)
         self.tool_implementations = {
