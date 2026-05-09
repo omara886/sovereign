@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root{--obsidian:#0A0A0A;--gold:#C9A84C;--gold-light:#E8C97A;--gold-dim:rgba(201,168,76,0.15);--slate:#1E293B;--slate-light:#2D3F55;--off-white:#F8F6F1;--text-primary:#F8F6F1;--text-secondary:rgba(248,246,241,0.6);--success:#10B981;--warning:#F59E0B;--danger:#EF4444}
+body{background:var(--obsidian);color:var(--text-primary);font-family:'IBM Plex Sans',sans-serif}
+.ar{font-family:'Cairo',sans-serif;direction:rtl}
