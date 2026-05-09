@@ -2,19 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system deps for psycopg2 + pillow
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev libjpeg-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend source
-COPY backend/ ./backend/
-
-WORKDIR /app/backend
+COPY . .
 
 EXPOSE 8000
 
