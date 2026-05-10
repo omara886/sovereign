@@ -28,6 +28,53 @@ const PROJECT_FILTERS: Record<string, string> = {
   SahmAlgo: 'sahmalgo',
 }
 
+function ImageViewer({ url }: { url: string | null | undefined }) {
+  const [fullscreen, setFullscreen] = useState(false)
+  if (!url) return null
+  return (
+    <>
+      {/* Fullscreen overlay */}
+      {fullscreen && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setFullscreen(false)}
+        >
+          <ProjectImage
+            url={url}
+            alt="Full design"
+            className="max-w-full max-h-full object-contain rounded-xl"
+          />
+          <button
+            className="absolute top-4 right-4 text-white bg-[rgba(255,255,255,0.15)] rounded-full p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            onClick={() => setFullscreen(false)}
+          >
+            <X size={20} />
+          </button>
+        </div>
+      )}
+      {/* Preview with tap-to-expand */}
+      <div className="px-5 pt-5">
+        <button
+          className="w-full relative group cursor-zoom-in"
+          onClick={() => setFullscreen(true)}
+          title="Tap to view full size"
+        >
+          <ProjectImage
+            url={url}
+            alt="Design preview"
+            className="w-full aspect-square rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)] object-cover"
+          />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-xl flex items-center justify-center">
+            <span className="opacity-0 group-hover:opacity-100 font-['IBM_Plex_Sans'] text-xs text-white bg-black/50 px-3 py-1.5 rounded-full transition-opacity">
+              Tap to expand
+            </span>
+          </div>
+        </button>
+      </div>
+    </>
+  )
+}
+
 function PlanSummary({ planId }: { planId: string }) {
   const [plan, setPlan] = useState<WeeklyPlan | null>(null)
   useEffect(() => {
@@ -80,13 +127,7 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }
           </div>
 
           {(asset?.design_url || asset?.design_thumbnail_url) && (
-            <div className="px-5 pt-5">
-            <ProjectImage
-              url={asset.design_url || asset.design_thumbnail_url}
-              alt=""
-              className="w-full aspect-video rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)]"
-            />
-          </div>
+            <ImageViewer url={asset.design_url || asset.design_thumbnail_url} />
           )}
 
           <div className="p-5 space-y-4">
