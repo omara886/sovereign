@@ -2,7 +2,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base import BaseAgent, HAIKU
+from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.fal_tools import generate_image_fal
 from app.tools.image_tools import apply_text_overlay, create_thumbnail, resize_image
 from app.tools.memory_tools import get_brand_memory
@@ -95,7 +95,7 @@ PLATFORM_DIMENSIONS = {
 
 
 class DesignAgent(BaseAgent):
-    MODEL = HAIKU  # just builds an fal.ai prompt + calls tools — no deep reasoning needed
+    MODEL = DEEPSEEK  # DeepSeek generates creative fal.ai prompts — cheap, fast
 
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=2048)
@@ -151,6 +151,67 @@ class DesignAgent(BaseAgent):
         _IMAGE_STORE.pop(image_key, None)
         return {"design_url": design_url, "thumbnail_url": thumbnail_url}
 
+    async def _generate_fal_prompt(
+        self,
+        copy_en: str,
+        copy_ar: str,
+        channel: str,
+        brand_style: str,
+        brand_colors: dict,
+        image_style: str,
+    ) -> str:
+        """
+        Use DeepSeek to generate a creative, marketing-psychology-driven fal.ai prompt.
+        Applies: emotional resonance, visual hierarchy, ad creative principles.
+        """
+        # Load Therapia DESIGN.md for context
+        design_md = ""
+        try:
+            from pathlib import Path as _P
+            dp = _P(__file__).parent.parent.parent / "design-systems" / "therapia" / "DESIGN.md"
+            if dp.exists():
+                design_md = dp.read_text()[:500]
+        except Exception:
+            pass
+
+        DESIGN_PROMPT_SYSTEM = (
+            "You are an expert ad creative director using open-design principles.\n\n"
+            f"BRAND DESIGN SYSTEM:\n{design_md}\n\n"
+            "OPEN-DESIGN VISUAL DIRECTION: Warm Soft × Tech Utility\n"
+            "- Aspirational lifestyle, dark luxury background, gold accents\n"
+            "- Emotional resonance: image emotion must match copy emotion\n"
+            "- AIDA: image grabs Attention, copy builds Interest\n"
+            "- Platform: Instagram=warm lifestyle square; LinkedIn=professional landscape\n\n"
+            "HARD RULES:\n"
+            "- NO TEXT IN IMAGE — leave clear 40% space at bottom for overlay\n"
+            "- Dark background (#0A0A0A or #1E293B), gold (#C9A84C) as accent\n"
+            "- NEVER: purple gradients, hospital/clinical imagery, generic stock smiles\n"
+            "- Saudi lifestyle context, cinematic quality\n\n"
+            "Output ONLY the fal.ai prompt. No explanation. Max 90 words."
+        )
+
+        msg = (
+            f"English copy: {copy_en[:200]}\n"
+            f"Arabic copy: {copy_ar[:100]}\n"
+            f"Channel: {channel}\n"
+            f"Brand style: {brand_style}\n"
+            f"Brand colors: primary={brand_colors.get('primary','#0A0A0A')} accent={brand_colors.get('accent','#C9A84C')}\n"
+            f"Image style preference: {image_style}\n\n"
+            "Generate the fal.ai prompt:"
+        )
+        try:
+            self.MODEL = DEEPSEEK
+            prompt = await self.run(msg, None)  # type: ignore — no DB needed
+            return prompt.strip().strip('"').strip("'")
+        except Exception:
+            # Fallback: rule-based prompt
+            return (
+                f"Professional marketing visual, {brand_style}, "
+                f"color palette primary {brand_colors.get('primary','#0A0A0A')} accent {brand_colors.get('accent','#C9A84C')}, "
+                f"dark elegant background, {image_style}, "
+                f"clear 35% empty space at bottom for text overlay, high quality photorealistic"
+            )
+
     async def generate_design(
         self,
         db: AsyncSession,
@@ -163,31 +224,33 @@ class DesignAgent(BaseAgent):
         cta_en: str = "",
     ) -> dict:
         """
-        Direct deterministic pipeline — no Claude needed for design generation.
-        Claude was causing rate limit failures mid-loop, leaving thumbnails as None.
+        Step 1: DeepSeek generates creative fal.ai prompt (marketing psychology applied)
+        Step 2: fal.ai generates the image (or branded placeholder if no FAL_KEY)
+        Step 3: Thmanyah font text overlay with brand colors
+        Step 4: base64 thumbnail upload (permanent)
         """
         try:
             platform_key = channel.replace("-", "_").replace(" ", "_") + "_post"
             dims = PLATFORM_DIMENSIONS.get(platform_key, (1080, 1080))
 
-            # 1. Get brand memory for fal.ai prompt
+            # 1. Read brand memory
             brand_mem = await get_brand_memory(db, project_id)
             colors = (brand_mem.color_palette or {}) if brand_mem else {}
-            style = (brand_mem.visual_style or "clean, professional, dark background") if brand_mem else "clean, professional"
+            style = (brand_mem.visual_style or "clean, professional, dark luxury") if brand_mem else "clean, professional"
+            image_style = (brand_mem.image_style or "lifestyle photography, warm light") if brand_mem else "lifestyle"
             primary = colors.get("primary", "#0A0A0A")
             accent = colors.get("accent", "#C9A84C")
 
-            fal_prompt = (
-                f"Professional marketing visual. {style}. "
-                f"Color palette: primary {primary}, accent {accent}. "
-                f"Dark background. No text in image — leave 40% clear space at bottom for text overlay. "
-                f"High quality, {dims[0]}x{dims[1]}px."
+            # 2. DeepSeek generates creative fal.ai prompt
+            fal_prompt = await self._generate_fal_prompt(
+                copy_en=copy_en, copy_ar=copy_ar, channel=channel,
+                brand_style=style, brand_colors=colors, image_style=image_style,
             )
 
-            # 2. Generate image
+            # 3. Generate image
             image_bytes = await generate_image_fal(fal_prompt, "fal-ai/flux/schnell", dims[0], dims[1])
 
-            # 3. Apply text overlay — pass real brand colors
+            # 4. Apply text overlay with Thmanyah font + brand colors
             text_ar = f"{copy_ar}\n{cta_ar}".strip() if copy_ar or cta_ar else ""
             text_en = f"{copy_en}\n{cta_en}".strip() if copy_en or cta_en else ""
             with_text = await apply_text_overlay(
@@ -196,7 +259,7 @@ class DesignAgent(BaseAgent):
                 brand_accent=accent,
             )
 
-            # 4. Create thumbnail and upload both
+            # 5. Thumbnail + upload
             thumb = await create_thumbnail(with_text)
             design_url = await upload_to_r2(with_text, f"{asset_id}.png", "image/png")
             thumbnail_url = await upload_to_r2(thumb, f"{asset_id}_thumb.jpg", "image/jpeg")

@@ -2,7 +2,7 @@ import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base import BaseAgent, SONNET
+from app.agents.base import BaseAgent, DEEPSEEK, SONNET
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 
 SYSTEM_PROMPT = """You are a native Gulf Saudi Arabic copywriter. You ONLY write in Saudi Gulf dialect.
@@ -70,7 +70,7 @@ TOOLS = [
 
 
 class LocalizationAgent(BaseAgent):
-    MODEL = SONNET
+    MODEL = DEEPSEEK
 
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=4096)

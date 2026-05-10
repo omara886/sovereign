@@ -2,7 +2,7 @@ import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base import BaseAgent, HAIKU
+from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 
 SYSTEM_PROMPT = """You are the QA Agent. Score copy quality 0-100. Pass ≥70.
@@ -54,7 +54,7 @@ TOOLS = [
 
 
 class QAAgent(BaseAgent):
-    MODEL = HAIKU  # structured scoring — Haiku is fast + 5x cheaper
+    MODEL = DEEPSEEK  # structured scoring — Haiku is fast + 5x cheaper
 
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=2048)

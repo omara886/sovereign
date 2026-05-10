@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     DATABASE_URL_SYNC: str
 
     ANTHROPIC_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""   # api.deepseek.com — 10x cheaper than Sonnet
     FAL_KEY: str = ""
 
     R2_ACCOUNT_ID: str = ""
