@@ -1,23 +1,43 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
+import { FetchError } from '@/components/ui/FetchError'
 import { Card } from '@/components/ui/Card'
 
 export default function SettingsPage() {
   const [backendUrl, setBackendUrl] = useState('Loading...')
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const load = async () => {
-      const res = await fetch('/api/debug-url')
-      if (res.ok) {
+      setError('')
+      try {
+        const res = await fetch('/api/debug-url')
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`)
+        }
         const text = await res.text()
         setBackendUrl(text.trim())
-      } else {
+      } catch {
         setBackendUrl('Unavailable')
+        setError('Could not load backend URL')
       }
     }
     void load()
   }, [])
+
+  const reload = async () => {
+    try {
+      setError('')
+      const res = await fetch('/api/debug-url')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const text = await res.text()
+      setBackendUrl(text.trim())
+    } catch {
+      setBackendUrl('Unavailable')
+      setError('Could not load backend URL')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
@@ -27,6 +47,12 @@ export default function SettingsPage() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-[7rem] space-y-4">
+        {error && (
+          <AnimatedContent delay={50}>
+            <FetchError message={error} onRetry={reload} />
+          </AnimatedContent>
+        )}
+
         <AnimatedContent delay={100}>
           <Card>
             <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1] mb-3">Account</h2>
