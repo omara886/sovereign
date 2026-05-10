@@ -34,10 +34,12 @@ async function handler(req: NextRequest, { params }: { params: { path: string[] 
     const resBody = await res.arrayBuffer()
     const resType = res.headers.get('content-type') || 'application/json'
 
-    return new NextResponse(resBody, {
-      status: res.status,
-      headers: { 'content-type': resType },
-    })
+    const headers: Record<string, string> = { 'content-type': resType }
+    // Forward cache-control from backend if present (e.g. metrics endpoints)
+    const cc = res.headers.get('cache-control')
+    if (cc) headers['cache-control'] = cc
+
+    return new NextResponse(resBody, { status: res.status, headers })
   } catch (err) {
     return NextResponse.json(
       { error: 'Backend unreachable', detail: String(err), backend: BACKEND },

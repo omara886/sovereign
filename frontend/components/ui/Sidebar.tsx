@@ -41,7 +41,7 @@ export default function Sidebar() {
     void load()
     const interval = window.setInterval(() => {
       void load()
-    }, 30000)
+    }, 120000) // 2 minutes — no need to hammer the server
     return () => window.clearInterval(interval)
   }, [])
 

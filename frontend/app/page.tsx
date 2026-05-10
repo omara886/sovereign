@@ -105,7 +105,7 @@ export default function DashboardPage() {
     void loadWeeklySummary()
     const interval = window.setInterval(() => {
       void loadMetrics()
-    }, 60000)
+    }, 300000) // 5 minutes — metrics don't change often
     return () => window.clearInterval(interval)
   }, [loadMetrics, loadWeeklySummary])
 
@@ -144,7 +144,7 @@ export default function DashboardPage() {
         clearInterval(interval)
         setPolling(false)
       }
-    }, 3000)
+    }, 5000) // 5s — pipeline takes 2-3 min total, no need to check every 3s
   }
 
   // Show status bar as soon as button is clicked (activeJob set), not just when polling starts
