@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Aurora from '@/components/react-bits/Aurora'
 import BlurText from '@/components/react-bits/BlurText'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
@@ -20,6 +20,11 @@ const PROJECTS = [
 const API = '/api/proxy'
 
 type JobStatus = { status: string; step: string; assets_passed_qa?: number; objective?: string; email_sent?: boolean }
+type MetricsSummary = {
+  published_assets: number
+  pending_approvals: number
+  total_assets_generated: number
+}
 
 const JOB_KEY = 'sovereign_active_job'
 
@@ -27,6 +32,21 @@ export default function DashboardPage() {
   const [activeJob, setActiveJob] = useState<{ jobId: string; project: string; mode: string } | null>(null)
   const [jobResult, setJobResult] = useState<JobStatus | null>(null)
   const [polling, setPolling] = useState(false)
+  const [metrics, setMetrics] = useState<MetricsSummary | null>(null)
+  const [metricsLoading, setMetricsLoading] = useState(true)
+
+  const loadMetrics = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/metrics/summary`)
+      if (res.ok) {
+        setMetrics(await res.json())
+      }
+    } catch {
+      // keep prior data on transient failures
+    } finally {
+      setMetricsLoading(false)
+    }
+  }, [])
 
   // Restore in-progress job on mount (survives page navigation)
   useEffect(() => {
@@ -39,6 +59,14 @@ export default function DashboardPage() {
       }
     } catch { /* ignore */ }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    void loadMetrics()
+    const interval = window.setInterval(() => {
+      void loadMetrics()
+    }, 60000)
+    return () => window.clearInterval(interval)
+  }, [loadMetrics])
 
   const triggerPipeline = async (slug: string, mode: 'plan' | 'run') => {
     setJobResult(null)
@@ -101,15 +129,15 @@ export default function DashboardPage() {
         <AnimatedContent delay={100}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {[
-              { icon: Clock, label: 'Pending Approvals', value: 0 },
-              { icon: CheckCircle, label: 'Published This Week', value: 0 },
-              { icon: TrendingUp, label: 'Budget Used (SAR)', value: 0 },
-              { icon: LayoutDashboard, label: 'Active Projects', value: 4 },
+              { icon: Clock, label: 'Pending Approvals', value: metrics?.pending_approvals ?? 0 },
+              { icon: CheckCircle, label: 'Published This Week', value: metrics?.published_assets ?? 0 },
+              { icon: TrendingUp, label: 'Total Assets', value: metrics?.total_assets_generated ?? 0 },
+              { icon: LayoutDashboard, label: 'Active Projects', value: PROJECTS.length },
             ].map(({ icon: Icon, label, value }) => (
               <Card key={label}>
                 <Icon size={16} className="text-[#C9A84C] mb-2" />
                 <p className="font-['IBM_Plex_Mono'] text-2xl text-[#F8F6F1] font-bold">
-                  <CountUp end={value} />
+                  {metricsLoading && !metrics ? <Loader2 size={18} className="animate-spin text-[#C9A84C]" /> : <CountUp end={value} />}
                 </p>
                 <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-1 leading-snug">{label}</p>
               </Card>
