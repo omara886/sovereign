@@ -56,10 +56,12 @@ async def _run_full_pipeline(project_id: str, job_id: str):
     from app.agents.localization import LocalizationAgent
     from app.agents.design import DesignAgent
     from app.agents.qa import QAAgent
+    from app.agents.qa import _validate_copy
     from app.agents.approval_agent import ApprovalAgent
     from app.models.weekly_plan import WeeklyPlan
     from app.models.asset import Asset
     from app.models.project import Project
+    from app.tools.memory_tools import get_project_memory
 
     _jobs[job_id] = {"status": "running", "step": "Generating weekly plan...", "project_id": project_id}
     try:
@@ -112,6 +114,15 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 copy_en = local_data.get("copy_en") or copy_data.get("copy_en", "")
                 cta_ar  = local_data.get("cta_ar")  or copy_data.get("cta_ar", "")
                 cta_en  = local_data.get("cta_en")  or copy_data.get("cta_en", "")
+
+                project_mem = await get_project_memory(db, project_id)
+                excluded_topics = []
+                if project_mem and isinstance(project_mem.constraints, dict):
+                    excluded_topics = project_mem.constraints.get("excluded_topics", []) or []
+                issues = _validate_copy(copy_ar, copy_en, cta_ar, cta_en, excluded_topics)
+                if issues:
+                    _jobs[job_id]["step"] = f"Skipping {channel} {asset_type}: {'; '.join(issues)}"
+                    continue
 
                 asset = Asset(
                     project_id=project_id,
