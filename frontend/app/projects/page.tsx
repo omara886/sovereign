@@ -15,7 +15,7 @@ const PROJECTS = [
 export default function ProjectsPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
-      <div className="pt-12 pb-6 px-4 md:px-8 border-b border-[rgba(201,168,76,0.1)]">
+      <div className="pt-[calc(3rem+env(safe-area-inset-top))] pb-6 px-4 md:px-8 border-b border-[rgba(201,168,76,0.1)]">
         <div className="max-w-3xl mx-auto">
           <h1 className="font-['Cormorant_Garamond'] text-3xl text-[#F8F6F1]">Projects</h1>
           <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)] mt-1">
