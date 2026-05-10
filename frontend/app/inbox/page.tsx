@@ -9,7 +9,7 @@ const FILTERS = ['All', 'Therapia', 'Qawwi', 'ProductBench', 'SahmAlgo']
 const CHANNEL_LABELS: Record<string, string> = {
   instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X / Twitter', google_ads: 'Google Ads'
 }
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API = '/api/proxy'
 
 interface Approval { id: string; asset_id: string | null; weekly_plan_id: string | null; decision: string | null; created_at: string }
 interface Asset { id: string; type: string; channel: string; language: string; copy_ar: string | null; copy_en: string | null; design_thumbnail_url: string | null; qa_score: number | null; status: string }

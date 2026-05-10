@@ -17,7 +17,7 @@ const PROJECTS = [
   { slug: 'sahmalgo', name: 'SahmAlgo', goal: 'Followers + signups' },
 ]
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API = '/api/proxy'
 
 type JobStatus = { status: string; step: string; assets_passed_qa?: number; objective?: string; email_sent?: boolean }
 
