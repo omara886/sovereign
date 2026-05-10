@@ -57,7 +57,7 @@ export default function CountUp({
 
   const formatted = decimals > 0
     ? value.toFixed(decimals)
-    : Math.round(value).toLocaleString('ar-SA')
+    : Math.round(value).toLocaleString('en-US')
 
   return (
     <span ref={elRef} className={className}>

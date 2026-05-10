@@ -12,6 +12,7 @@ from app.routers.plans import router as plans_router
 from app.routers.projects import router as projects_router
 from app.routers.webhook import router as webhook_router
 from app.routers.pipeline import router as pipeline_router
+from app.routers.uploads import router as uploads_router
 from app.scheduler.jobs import scheduler
 
 
@@ -52,3 +53,4 @@ app.include_router(assets_router, prefix="/api")
 app.include_router(approvals_router, prefix="/api")
 app.include_router(webhook_router, prefix="/api")
 app.include_router(pipeline_router, prefix="/api")
+app.include_router(uploads_router, prefix="/api")
