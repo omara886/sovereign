@@ -64,56 +64,43 @@ function TodaysFocus({
 
   if (pendingApprovals > 0) {
     return (
-      <Card className="mb-6">
-        <div className="flex items-center gap-4">
+      <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-xl bg-[rgba(201,168,76,0.08)] border border-[rgba(201,168,76,0.2)]">
           <div className="w-10 h-10 rounded-full bg-[#C9A84C] text-[#0A0A0A] font-bold text-sm flex items-center justify-center shrink-0">
             {pendingApprovals}
           </div>
-        <div className="flex-1">
-          <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">
-            {pendingApprovals} asset{pendingApprovals > 1 ? 's' : ''} waiting for your approval
-          </p>
-          <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-0.5">
-            Review and approve to schedule publishing
-          </p>
-        </div>
-        <Link href="/inbox" className="shrink-0 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] px-4 py-2 rounded-xl min-h-[44px] flex items-center hover:bg-[#E8C97A] transition-colors">
-          Review →
-        </Link>
-        </div>
-      </Card>
+          <div className="flex-1 min-w-0">
+            <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">
+              {pendingApprovals} asset{pendingApprovals > 1 ? 's' : ''} waiting for approval
+            </p>
+            <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-0.5">
+              Review and approve to schedule publishing
+            </p>
+          </div>
+          <Link href="/inbox" className="shrink-0 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] px-4 py-2.5 rounded-xl min-h-[44px] flex items-center hover:bg-[#E8C97A] transition-colors">
+            Review →
+          </Link>
+      </div>
     )
   }
 
   if (totalGenerated === 0) {
     return (
-      <Card className="mb-6">
-        <div className="flex items-center gap-4">
-        <div className="w-10 h-10 rounded-full bg-[rgba(201,168,76,0.15)] border border-[rgba(201,168,76,0.3)] text-[#C9A84C] font-bold text-sm flex items-center justify-center shrink-0">
+      <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]">
+        <div className="w-10 h-10 rounded-full bg-[rgba(201,168,76,0.15)] border border-[rgba(201,168,76,0.3)] text-[#C9A84C] font-bold flex items-center justify-center shrink-0 text-sm">
           1
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">Start with Therapia</p>
-          <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-0.5">Upload logo → generate plan → approve → publishes automatically</p>
+          <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-0.5">Upload logo → generate plan → approve content → publishes automatically</p>
         </div>
-        <Link href="/projects/therapia" className="shrink-0 font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] px-4 py-2 rounded-xl min-h-[44px] flex items-center hover:bg-[rgba(201,168,76,0.08)] transition-colors">
+        <Link href="/projects/therapia" className="shrink-0 font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] border border-[rgba(201,168,76,0.3)] px-4 py-2.5 rounded-xl min-h-[44px] flex items-center hover:bg-[rgba(201,168,76,0.08)] transition-colors">
           Set up →
         </Link>
-        </div>
-      </Card>
+      </div>
     )
   }
 
-  return (
-    <Card className="mb-6">
-      <div className="flex items-center gap-3">
-      <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-      <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)]">
-        System running — next plan generates Monday 8AM Riyadh
-      </p>
-      </div>
-    </Card>
-  )
+  return null
 }
 
 export default function DashboardPage() {
