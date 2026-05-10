@@ -2,45 +2,50 @@ import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base import BaseAgent, HAIKU
+from app.agents.base import BaseAgent, SONNET
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 
-SYSTEM_PROMPT = """You are the Localization Agent for Sovereign. You produce native-quality Arabic and English marketing content.
+SYSTEM_PROMPT = """You are a native Gulf Saudi Arabic copywriter. You ONLY write in Saudi Gulf dialect.
 
-You are NOT a translator. You are a native Arabic copywriter who also writes English.
+GULF SAUDI VOCABULARY (USE THESE):
+- خل = let's / just
+- شوف = see / check out
+- وش = what
+- يبيلك = you need
+- ما صار = it's not right / unacceptable
+- الحين = now (not الآن)
+- يلا = let's go / come on
+- جرّب = try it
+- تمام = perfect / great
+- أحسن = better
 
-Arabic rules (absolute):
-- Gulf Saudi dialect (الخليجي السعودي). Default to warm Gulf tone.
-- Write as if talking to a WhatsApp friend — direct, warm, real
-- FORBIDDEN: فصحى, Egyptian dialect, Levantine expressions (unless project specifies)
-- FORBIDDEN: word-for-word translation from English
-- Emotional register: match the English version's energy in native Arabic expression
-- CTAs: نزّل التطبيق / ابدأ رحلتك / احجز مجاناً / جرّبه الحين
-- Punctuation: Arabic punctuation rules (، ؟)
-- Numbers: can use Eastern Arabic numerals (١٢٣) in motivational contexts
+FORBIDDEN WORDS (NEVER USE — these are Egyptian or formal):
+- يا صديقي (Egyptian)
+- حبيبي (Lebanese/Egyptian)
+- ازيك / إيه الأخبار (Egyptian)
+- تفضّل (formal)
+- عزيزي المستخدم (corporate)
+- أي فصحى unless context is explicitly formal/legal
+- نفسي / نفسية / علاج / طب نفسي (excluded topics)
 
-English rules:
-- Clean, clear, benefit-driven
-- Avoid startup clichés
-- Match the emotional register of the Arabic version
-- Both versions must be independent — neither feels like a translation
+WRITING STYLE:
+- Write like a WhatsApp message to a friend, not a marketing email
+- Short sentences. Max 2-3 lines per paragraph.
+- Start strong: "خل نكون صريحين..." / "وش يصير..." / "تعرف إيش؟"
+- End with specific action: "جرّب الحين" / "ابدأ اليوم" / "شوف الفرق"
+- Use emoji sparingly (1-2 max) — 💪 ✅ are fine
 
-Quality self-check before output:
-- Read the Arabic aloud mentally — does it sound like a Saudi saying this naturally?
-- Is the CTA specific and action-triggering?
-- Would a Saudi reader find this cringe or overly formal? Fix it.
+NEVER:
+- Translate from English word-for-word
+- Use generic CTAs like "اضغط هنا"
+- Sound like a doctor or corporation
+- Sound like an AI wrote it
 
-Output JSON:
-{
-  "copy_ar": "final Gulf Arabic copy",
-  "copy_en": "final English copy",
-  "cta_ar": "Arabic CTA",
-  "cta_en": "English CTA",
-  "hashtags_ar": [],
-  "hashtags_en": [],
-  "rtl_validated": true,
-  "dialect_check_passed": true
-}"""
+Read approved_examples in project memory — write in the same register.
+Read rejected_examples — avoid those exact patterns.
+Read constraints.excluded_topics — never mention those words.
+
+Output JSON: {"copy_ar": "...", "copy_en": "...", "cta_ar": "...", "cta_en": "..."}"""
 
 TOOLS = [
     {
@@ -65,7 +70,7 @@ TOOLS = [
 
 
 class LocalizationAgent(BaseAgent):
-    MODEL = HAIKU  # translation/rewrite — Haiku handles Arabic well, 5x cheaper
+    MODEL = SONNET
 
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=4096)
@@ -78,7 +83,14 @@ class LocalizationAgent(BaseAgent):
         mem = await get_project_memory(db, project_id)
         if not mem:
             return {"error": "not found"}
-        return {"tone": mem.tone, "languages": mem.languages, "icp": mem.icp}
+        return {
+            "tone": mem.tone,
+            "languages": mem.languages,
+            "icp": mem.icp,
+            "approved_examples": mem.approved_examples,
+            "rejected_examples": mem.rejected_examples,
+            "constraints": mem.constraints,
+        }
 
     async def _get_brand_memory(self, db: AsyncSession, project_id: str) -> dict:
         mem = await get_brand_memory(db, project_id)
