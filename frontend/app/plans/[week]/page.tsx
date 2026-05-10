@@ -181,7 +181,7 @@ export default function PlanWeekPage() {
                       <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.65)] leading-relaxed">{plan.rationale}</p>
                       <div className="space-y-2">
                         {plan.tactics.map((tactic, tacticIndex) => (
-                          <div key={String(tactic.id ?? tacticIndex)} className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.05)] p-4">
+                          <Card key={String(tactic.id ?? tacticIndex)}>
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                               <Badge variant="channel">{String(tactic.channel ?? 'channel')}</Badge>
                               <Badge variant="default">{String(tactic.asset_type ?? 'asset')}</Badge>
@@ -190,7 +190,7 @@ export default function PlanWeekPage() {
                             <p className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.45)] mt-2">
                               SAR {Number(tactic.budget_estimate_sar || 0).toLocaleString('en-US')}
                             </p>
-                          </div>
+                          </Card>
                         ))}
                       </div>
                       {plan.risk_flags.length > 0 && (

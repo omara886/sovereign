@@ -527,7 +527,7 @@ export default function ProjectPage() {
                   )}
                   {currentPlan && (
                     <div className="space-y-4">
-                      <div className="rounded-xl border border-[rgba(201,168,76,0.15)] bg-[rgba(255,255,255,0.02)] p-4">
+                      <Card>
                         <div className="flex flex-wrap items-center gap-2 mb-3">
                           <Badge variant="gold">{currentPlan.funnel_focus}</Badge>
                           <Badge variant="channel">{currentPlan.week_start}</Badge>
@@ -540,22 +540,22 @@ export default function ProjectPage() {
                           {currentPlan.rationale}
                         </p>
                         <div className="mt-4 grid grid-cols-2 gap-3">
-                          <div className="rounded-xl bg-[rgba(255,255,255,0.03)] p-3">
+                          <Card>
                             <p className="font-['IBM_Plex_Sans'] text-[11px] uppercase tracking-[0.18em] text-[rgba(248,246,241,0.35)]">Budget</p>
                             <p className="font-['IBM_Plex_Mono'] text-sm text-[#C9A84C] mt-1">
                               SAR {Number(currentPlan.total_budget_estimate || 0).toLocaleString('en-US')}
                             </p>
-                          </div>
-                          <div className="rounded-xl bg-[rgba(255,255,255,0.03)] p-3">
+                          </Card>
+                          <Card>
                             <p className="font-['IBM_Plex_Sans'] text-[11px] uppercase tracking-[0.18em] text-[rgba(248,246,241,0.35)]">Status</p>
                             <p className="font-['IBM_Plex_Mono'] text-sm text-[#F8F6F1] mt-1">{currentPlan.status}</p>
-                          </div>
+                          </Card>
                         </div>
-                      </div>
+                      </Card>
 
                       <div className="space-y-3">
                         {currentPlan.tactics.map((tactic, index) => (
-                          <div key={tactic.id ?? `${tactic.channel}-${index}`} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] p-4">
+                          <Card key={tactic.id ?? `${tactic.channel}-${index}`}>
                             <div className="flex flex-wrap items-center gap-2 mb-3">
                               <Badge variant="channel">{tactic.channel || 'channel'}</Badge>
                               <Badge variant="default">{tactic.asset_type || 'asset'}</Badge>
@@ -582,16 +582,16 @@ export default function ProjectPage() {
                             </div>
                             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
                               {tactic.expected_metric && (
-                                <div className="rounded-lg bg-[rgba(255,255,255,0.03)] px-3 py-2">
+                                <Card>
                                   <p className="font-['IBM_Plex_Sans'] text-[11px] uppercase tracking-[0.16em] text-[rgba(248,246,241,0.35)]">Expected metric</p>
                                   <p className="font-['IBM_Plex_Sans'] text-xs text-[#F8F6F1] mt-1">{tactic.expected_metric}</p>
-                                </div>
+                                </Card>
                               )}
                               {tactic.expected_value && (
-                                <div className="rounded-lg bg-[rgba(255,255,255,0.03)] px-3 py-2">
+                                <Card>
                                   <p className="font-['IBM_Plex_Sans'] text-[11px] uppercase tracking-[0.16em] text-[rgba(248,246,241,0.35)]">Expected value</p>
                                   <p className="font-['IBM_Plex_Sans'] text-xs text-[#F8F6F1] mt-1">{tactic.expected_value}</p>
-                                </div>
+                                </Card>
                               )}
                             </div>
                             {tactic.stop_loss_sar !== null && tactic.stop_loss_sar !== undefined && (
@@ -599,19 +599,19 @@ export default function ProjectPage() {
                                 Stop loss: SAR {Number(tactic.stop_loss_sar).toLocaleString('en-US')}
                               </p>
                             )}
-                          </div>
+                          </Card>
                         ))}
                       </div>
 
                       {currentPlan.risk_flags?.length > 0 && (
-                        <div className="rounded-xl border border-[rgba(245,158,11,0.18)] bg-[rgba(245,158,11,0.06)] p-4">
+                        <Card>
                           <p className="font-['IBM_Plex_Sans'] text-sm font-medium text-[#F8F6F1] mb-2">Risk flags</p>
                           <div className="flex flex-wrap gap-2">
                             {currentPlan.risk_flags.map((flag, index) => (
                               <Badge key={`${flag}-${index}`} variant="warning">{flag}</Badge>
                             ))}
                           </div>
-                        </div>
+                        </Card>
                       )}
                     </div>
                   )}
@@ -636,11 +636,11 @@ export default function ProjectPage() {
             </AnimatedContent>
 
             <AnimatedContent delay={200}>
-              <div className="rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-4 py-3">
+              <Card>
                 <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.35)] leading-relaxed">
                   The AI reads your uploaded logo, font, screenshots, ICP, and brand voice before generating anything. Upload assets first for best results.
                 </p>
-              </div>
+              </Card>
             </AnimatedContent>
           </div>
         )}
@@ -692,7 +692,7 @@ export default function ProjectPage() {
                         return bScore - aScore
                       })[0]
                       return (
-                        <div className="rounded-xl border border-[rgba(201,168,76,0.15)] bg-[rgba(255,255,255,0.02)] p-4">
+                        <Card>
                           <p className="font-['IBM_Plex_Sans'] text-xs uppercase tracking-[0.18em] text-[rgba(248,246,241,0.35)] mb-2">Top Performer</p>
                           <div className="flex items-start gap-3">
                             <div className="w-20 shrink-0">
@@ -714,13 +714,13 @@ export default function ProjectPage() {
                               )}
                             </div>
                           </div>
-                        </div>
+                        </Card>
                       )
                     })()}
 
                     <div className="space-y-3">
                       {analyticsAssets.map(asset => (
-                        <div key={asset.asset_id} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] p-4">
+                        <Card key={asset.asset_id}>
                           <div className="flex items-start gap-3">
                             <div className="w-20 shrink-0">
                               <ProjectImage
@@ -749,7 +749,7 @@ export default function ProjectPage() {
                               )}
                             </div>
                           </div>
-                        </div>
+                        </Card>
                       ))}
                     </div>
                   </div>

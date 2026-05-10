@@ -28,6 +28,10 @@ type ProjectSummary = {
   status: string
   pendingApprovals: number
   hasPlan: boolean
+  planStatus: string | null
+  hasLogo: boolean
+  nextAction: string
+  publishedAssets: number
 }
 type WeeklySummaryItem = {
   name: string
@@ -60,10 +64,11 @@ function TodaysFocus({
 
   if (pendingApprovals > 0) {
     return (
-      <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-xl bg-[rgba(201,168,76,0.08)] border border-[rgba(201,168,76,0.2)]">
-        <div className="w-10 h-10 rounded-full bg-[#C9A84C] text-[#0A0A0A] font-bold text-sm flex items-center justify-center shrink-0">
-          {pendingApprovals}
-        </div>
+      <Card className="mb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-[#C9A84C] text-[#0A0A0A] font-bold text-sm flex items-center justify-center shrink-0">
+            {pendingApprovals}
+          </div>
         <div className="flex-1">
           <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">
             {pendingApprovals} asset{pendingApprovals > 1 ? 's' : ''} waiting for your approval
@@ -75,13 +80,15 @@ function TodaysFocus({
         <Link href="/inbox" className="shrink-0 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] px-4 py-2 rounded-xl min-h-[44px] flex items-center hover:bg-[#E8C97A] transition-colors">
           Review →
         </Link>
-      </div>
+        </div>
+      </Card>
     )
   }
 
   if (totalGenerated === 0) {
     return (
-      <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.07)]">
+      <Card className="mb-6">
+        <div className="flex items-center gap-4">
         <div className="w-10 h-10 rounded-full bg-[rgba(201,168,76,0.15)] border border-[rgba(201,168,76,0.3)] text-[#C9A84C] font-bold text-sm flex items-center justify-center shrink-0">
           1
         </div>
@@ -92,17 +99,20 @@ function TodaysFocus({
         <Link href="/projects/therapia" className="shrink-0 font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] px-4 py-2 rounded-xl min-h-[44px] flex items-center hover:bg-[rgba(201,168,76,0.08)] transition-colors">
           Set up →
         </Link>
-      </div>
+        </div>
+      </Card>
     )
   }
 
   return (
-    <div className="mb-6 flex items-center gap-3 px-5 py-3 rounded-xl bg-[rgba(16,185,129,0.06)] border border-[rgba(16,185,129,0.15)]">
+    <Card className="mb-6">
+      <div className="flex items-center gap-3">
       <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
       <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)]">
         System running — next plan generates Monday 8AM Riyadh
       </p>
-    </div>
+      </div>
+    </Card>
   )
 }
 
@@ -158,15 +168,16 @@ export default function DashboardPage() {
       if (!res.ok) return
       const data: Array<{ id: string; slug: string; name: string; primary_goal: string; status: string }> = await res.json()
       const enriched = await Promise.all(data.map(async project => {
-        const [approvalsRes, planRes] = await Promise.all([
-          fetch(`${API}/approvals?status=pending&project_id=${project.id}`),
-          fetch(`${API}/plans/current/${project.slug}`),
-        ])
-        const approvals = approvalsRes.ok ? await approvalsRes.json() : []
+        const statusRes = await fetch(`${API}/projects/${project.slug}/status`)
+        const statusData = statusRes.ok ? await statusRes.json() : null
         return {
           ...project,
-          pendingApprovals: Array.isArray(approvals) ? approvals.length : 0,
-          hasPlan: planRes.ok,
+          pendingApprovals: Number(statusData?.pending_approvals ?? 0),
+          hasPlan: Boolean(statusData?.has_plan),
+          planStatus: statusData?.plan_status ?? null,
+          hasLogo: Boolean(statusData?.has_logo),
+          nextAction: statusData?.next_action ?? 'complete',
+          publishedAssets: Number(statusData?.published_assets ?? 0),
         }
       }))
       setProjects(enriched)
@@ -358,12 +369,14 @@ export default function DashboardPage() {
                 </Badge>
               ) : project.pendingApprovals > 0 ? (
                 <Badge variant="gold">{project.pendingApprovals} pending</Badge>
+              ) : !project.hasLogo ? (
+                <Badge variant="default">Needs logo</Badge>
               ) : !project.hasPlan ? (
                 <Badge variant="default">Not started</Badge>
-              ) : project.status === 'active' ? (
+              ) : project.planStatus === 'approved' || project.planStatus === 'executing' ? (
                 <Badge variant="success">Ready</Badge>
               ) : (
-                <Badge variant="default">{project.status}</Badge>
+                <Badge variant="default">{project.planStatus || project.status}</Badge>
               )
               const cardTone = projectIsRunning
                 ? 'border-[rgba(201,168,76,0.22)] bg-[linear-gradient(180deg,rgba(201,168,76,0.08),rgba(255,255,255,0.02))]'
@@ -376,9 +389,19 @@ export default function DashboardPage() {
                 ? 'Pipeline is running now'
                 : project.pendingApprovals > 0
                 ? 'Needs review in Inbox'
+                : !project.hasLogo
+                ? 'Upload logo first'
                 : !project.hasPlan
                 ? 'Upload assets to begin'
                 : 'Plan ready and waiting'
+              const nextAction = {
+                upload_logo: { label: 'Upload Logo →', href: `/projects/${project.slug}`, primary: false },
+                generate_plan: { label: 'Generate Plan →', href: `/projects/${project.slug}?tab=Pipeline`, primary: false },
+                approve_plan: { label: 'Approve Plan →', href: `/projects/${project.slug}?tab=Pipeline`, primary: true },
+                review_inbox: { label: `Review Inbox (${project.pendingApprovals})`, href: '/inbox', primary: true },
+                running: { label: 'Generating...', href: `/projects/${project.slug}`, primary: false },
+                complete: { label: 'View Project →', href: `/projects/${project.slug}`, primary: false },
+              }[project.nextAction] || { label: 'View Project →', href: `/projects/${project.slug}`, primary: false }
 
               return (
                 <AnimatedContent key={project.slug} delay={250 + i * 60}>
@@ -394,24 +417,31 @@ export default function DashboardPage() {
                       {statusBadge}
                     </div>
 
-                    {/* Action buttons */}
-                    <div className="grid grid-cols-2 gap-2 mt-4">
-                      <button
-                        onClick={() => triggerPipeline(project.slug, 'plan')}
-                        disabled={!!isRunning}
-                        className="flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-xs bg-[rgba(201,168,76,0.08)] hover:bg-[rgba(201,168,76,0.15)] text-[#C9A84C] border border-[rgba(201,168,76,0.2)] rounded-xl py-2.5 transition-all duration-200 disabled:opacity-40 min-h-[44px]"
+                    <div className="mt-4 space-y-2">
+                      <Link
+                        href={nextAction.href}
+                        className={`w-full flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm rounded-xl py-3 min-h-[48px] transition-all duration-200 ${nextAction.primary ? 'bg-[#C9A84C] hover:bg-[#E8C97A] text-[#0A0A0A] font-bold' : 'bg-[rgba(201,168,76,0.08)] hover:bg-[rgba(201,168,76,0.15)] text-[#C9A84C] border border-[rgba(201,168,76,0.2)]'}`}
                       >
-                        <Play size={13} />
-                        Weekly Plan
-                      </button>
-                      <button
-                        onClick={() => triggerPipeline(project.slug, 'run')}
-                        disabled={!!isRunning}
-                        className="flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-xs bg-[#C9A84C] hover:bg-[#E8C97A] text-[#0A0A0A] rounded-xl py-2.5 font-bold transition-all duration-200 disabled:opacity-40 min-h-[44px]"
-                      >
-                        <Zap size={13} />
-                        Full Pipeline
-                      </button>
+                        {nextAction.label}
+                      </Link>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => triggerPipeline(project.slug, 'plan')}
+                          disabled={!!isRunning}
+                          className="flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-xs bg-[rgba(201,168,76,0.08)] hover:bg-[rgba(201,168,76,0.15)] text-[#C9A84C] border border-[rgba(201,168,76,0.2)] rounded-xl py-2.5 transition-all duration-200 disabled:opacity-40 min-h-[44px]"
+                        >
+                          <Play size={13} />
+                          Weekly Plan
+                        </button>
+                        <button
+                          onClick={() => triggerPipeline(project.slug, 'run')}
+                          disabled={!!isRunning}
+                          className="flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-xs bg-[#C9A84C] hover:bg-[#E8C97A] text-[#0A0A0A] rounded-xl py-2.5 font-bold transition-all duration-200 disabled:opacity-40 min-h-[44px]"
+                        >
+                          <Zap size={13} />
+                          Full Pipeline
+                        </button>
+                      </div>
                     </div>
                   </Card>
                 </SpotlightCard>
@@ -423,12 +453,12 @@ export default function DashboardPage() {
 
         {/* Legend */}
         <AnimatedContent delay={500}>
-          <div className="mt-6 rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-5 py-4">
+          <Card className="mt-6">
             <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] leading-relaxed">
               <span className="text-[#C9A84C] font-medium">Weekly Plan</span> — Strategy Agent generates this week&apos;s marketing plan (30 sec) &nbsp;·&nbsp;
               <span className="text-[#C9A84C] font-medium">Full Pipeline</span> — Plan + Copy + Design + QA + sends to Inbox for approval (2-3 min)
             </p>
-          </div>
+          </Card>
         </AnimatedContent>
 
         {!weeklySummaryLoading && !weeklySummaryError && weeklySummary.length > 0 && (
@@ -448,7 +478,7 @@ export default function DashboardPage() {
                 {weeklySummary.map(project => {
                   const bullets = splitLearnings(project.learnings)
                   return (
-                    <div key={project.slug} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] p-4">
+                    <Card key={project.slug}>
                       <div className="flex items-start gap-3">
                         {project.top_asset_url ? (
                           <ProjectImage
@@ -474,7 +504,7 @@ export default function DashboardPage() {
                           </ul>
                         </div>
                       </div>
-                    </div>
+                    </Card>
                   )
                 })}
               </div>

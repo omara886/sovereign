@@ -69,12 +69,12 @@ export default function AnalyticsPage() {
                 { label: 'Pending Approvals', value: summary?.pending_approvals ?? 0 },
                 { label: 'Total Assets', value: summary?.total_assets_generated ?? 0 },
               ].map(({ label, value }) => (
-                <div key={label} className="rounded-2xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.05)] p-4">
+                <Card key={label}>
                   <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-2">{label}</p>
                   <p className="font-['IBM_Plex_Mono'] text-3xl text-[#F8F6F1]">
                     {loading ? <Loader2 size={18} className="animate-spin text-[#C9A84C]" /> : <CountUp end={value} />}
                   </p>
-                </div>
+                </Card>
               ))}
             </div>
             <div className="mt-4 flex items-center gap-2 text-[rgba(248,246,241,0.45)]">
