@@ -58,6 +58,8 @@ TOOLS = [
 
 
 class AnalyticsAgent(BaseAgent):
+    MODEL = DEEPSEEK
+
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=4096)
         self.tool_implementations = {

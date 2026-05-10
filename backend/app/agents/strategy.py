@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base import BaseAgent
+from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.memory_tools import get_brand_memory, get_project_memory, update_project_memory
 
 SYSTEM_PROMPT = """You are the Strategy Agent for Sovereign, an autonomous AI marketing command center.
@@ -80,6 +80,8 @@ TOOLS = [
 
 
 class StrategyAgent(BaseAgent):
+    MODEL = DEEPSEEK
+
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=4096)
         self.tool_implementations = {

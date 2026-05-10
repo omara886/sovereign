@@ -2,7 +2,7 @@ import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base import BaseAgent
+from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.crawl_tools import crawl_website, extract_brand_signals
 from app.tools.memory_tools import get_brand_memory, update_brand_memory
 
@@ -85,6 +85,8 @@ TOOLS = [
 
 
 class BrandAgent(BaseAgent):
+    MODEL = DEEPSEEK
+
     def __init__(self):
         super().__init__(system_prompt=SYSTEM_PROMPT, tools=TOOLS, max_tokens=4096)
         self.tool_implementations = {
