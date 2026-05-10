@@ -256,7 +256,7 @@ export default function InboxPage() {
         <div className="flex gap-2 overflow-x-auto pb-4 mb-5">
           {FILTERS.map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`shrink-0 font-['IBM_Plex_Sans'] text-sm px-4 py-2 rounded-full border transition-all min-h-[40px] ${filter === f ? 'bg-[rgba(201,168,76,0.15)] border-[rgba(201,168,76,0.4)] text-[#C9A84C]' : 'border-[rgba(255,255,255,0.08)] text-[rgba(248,246,241,0.5)]'}`}>{f}</button>
+              className={`shrink-0 font-['IBM_Plex_Sans'] text-sm px-4 py-2.5 rounded-full border transition-all min-h-[44px] ${filter === f ? 'bg-[rgba(201,168,76,0.15)] border-[rgba(201,168,76,0.4)] text-[#C9A84C]' : 'border-[rgba(255,255,255,0.08)] text-[rgba(248,246,241,0.5)]'}`}>{f}</button>
           ))}
         </div>
 

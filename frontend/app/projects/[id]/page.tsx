@@ -246,7 +246,7 @@ export default function ProjectPage() {
           <div className="flex gap-1 overflow-x-auto whitespace-nowrap pb-2 -mx-4 px-4 md:mx-0 md:px-0">
             {TABS.map(t => (
               <button key={t} onClick={() => setTab(t)}
-                className={`shrink-0 font-['IBM_Plex_Sans'] text-sm px-4 py-2.5 border-b-2 transition-all duration-200 ${
+                className={`shrink-0 font-['IBM_Plex_Sans'] text-xs sm:text-sm px-4 py-3 min-h-[44px] border-b-2 transition-all duration-200 ${
                   tab === t
                     ? 'border-[#C9A84C] text-[#C9A84C]'
                     : 'border-transparent text-[rgba(248,246,241,0.4)] hover:text-[#F8F6F1]'
@@ -267,10 +267,10 @@ export default function ProjectPage() {
           <div className="space-y-6">
             <AnimatedContent delay={0}>
               {/* Type selector */}
-                <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
+              <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
                   {FILE_TYPES.map(({ key, label, icon: Icon }) => (
                     <button key={key} onClick={() => setActiveType(key)}
-                    className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-['IBM_Plex_Sans'] transition-all min-h-[40px] ${
+                    className={`shrink-0 flex items-center gap-1.5 px-3 py-3 rounded-xl border text-xs font-['IBM_Plex_Sans'] transition-all min-h-[44px] ${
                       activeType === key
                         ? 'bg-[rgba(201,168,76,0.15)] border-[rgba(201,168,76,0.4)] text-[#C9A84C]'
                         : 'border-[rgba(255,255,255,0.08)] text-[rgba(248,246,241,0.4)]'

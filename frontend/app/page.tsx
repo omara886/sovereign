@@ -334,7 +334,7 @@ export default function DashboardPage() {
         <AnimatedContent delay={200}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1]">Projects</h2>
-            <Link href="/inbox" className="font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] hover:underline">
+            <Link href="/inbox" className="inline-flex items-center justify-center min-h-[44px] font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] hover:underline px-2">
               Inbox →
             </Link>
           </div>
