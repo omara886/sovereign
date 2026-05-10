@@ -1,5 +1,8 @@
 import uuid
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +12,7 @@ from app.models.brand_memory import BrandMemory
 from app.tools.r2_tools import upload_to_r2
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
+LOCAL_FALLBACK_DIR = Path("/tmp/sovereign_r2")
 
 ALLOWED_TYPES = {
     "image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml",
@@ -57,6 +61,14 @@ async def upload_file(
         "file_type": file_type,
         "size_kb": round(len(content) / 1024, 1),
     }
+
+
+@router.get("/serve/{project_slug}/{file_type}/{filename}")
+async def serve_file(project_slug: str, file_type: str, filename: str):
+    path = LOCAL_FALLBACK_DIR / project_slug / file_type / filename
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    return FileResponse(path)
 
 
 @router.get("/{project_slug}")

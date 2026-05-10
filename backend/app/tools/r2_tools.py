@@ -46,7 +46,8 @@ async def upload_to_r2(file_bytes: bytes, filename: str, content_type: str = "ap
     target = _LOCAL_FALLBACK / filename
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(file_bytes)
-    return f"file://{target}"
+    backend_base = settings.NEXT_PUBLIC_API_URL or "https://backend-production-37a17.up.railway.app"
+    return f"{backend_base.rstrip('/')}/api/uploads/serve/{filename}"
 
 
 def get_signed_url(filename: str, expiry_seconds: int = 3600) -> str:
@@ -59,4 +60,5 @@ def get_signed_url(filename: str, expiry_seconds: int = 3600) -> str:
             Params={"Bucket": bucket, "Key": filename},
             ExpiresIn=expiry_seconds,
         )
-    return f"file://{_LOCAL_FALLBACK}/{filename}"
+    backend_base = settings.NEXT_PUBLIC_API_URL or "https://backend-production-37a17.up.railway.app"
+    return f"{backend_base.rstrip('/')}/api/uploads/serve/{filename}"
