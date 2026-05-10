@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Approval, Asset, BrandMemory, Project, WeeklyPlan
+from app.models import Approval, Asset, BrandMemory, Project, ProjectMemory, WeeklyPlan
 from app.schemas import ProjectCreate, ProjectRead, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -46,6 +46,7 @@ async def get_project_status(project_ref: str, db: AsyncSession = Depends(get_db
 
     pid = project.id
     brand = (await db.execute(select(BrandMemory).where(BrandMemory.project_id == pid))).scalar_one_or_none()
+    memory = (await db.execute(select(ProjectMemory).where(ProjectMemory.project_id == pid))).scalar_one_or_none()
     latest_plan = (await db.execute(
         select(WeeklyPlan).where(WeeklyPlan.project_id == pid).order_by(WeeklyPlan.week_start.desc(), WeeklyPlan.created_at.desc()).limit(1)
     )).scalar_one_or_none()
@@ -63,6 +64,7 @@ async def get_project_status(project_ref: str, db: AsyncSession = Depends(get_db
         "slug": project.slug,
         "name": project.name,
         "has_logo": bool(brand and brand.logo_url),
+        "has_memory": memory is not None,
         "has_plan": latest_plan is not None,
         "plan_status": latest_plan.status if latest_plan else None,
         "plan_id": str(latest_plan.id) if latest_plan else None,
