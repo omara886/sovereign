@@ -46,6 +46,65 @@ function splitLearnings(text: string) {
     .slice(0, 3)
 }
 
+function TodaysFocus({
+  pendingApprovals,
+  totalGenerated,
+  loading,
+}: {
+  pendingApprovals: number
+  totalGenerated: number
+  loading: boolean
+}) {
+  if (loading) return null
+
+  if (pendingApprovals > 0) {
+    return (
+      <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-xl bg-[rgba(201,168,76,0.08)] border border-[rgba(201,168,76,0.2)]">
+        <div className="w-10 h-10 rounded-full bg-[#C9A84C] text-[#0A0A0A] font-bold text-sm flex items-center justify-center shrink-0">
+          {pendingApprovals}
+        </div>
+        <div className="flex-1">
+          <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">
+            {pendingApprovals} asset{pendingApprovals > 1 ? 's' : ''} waiting for your approval
+          </p>
+          <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-0.5">
+            Review and approve to schedule publishing
+          </p>
+        </div>
+        <Link href="/inbox" className="shrink-0 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] px-4 py-2 rounded-xl min-h-[44px] flex items-center hover:bg-[#E8C97A] transition-colors">
+          Review →
+        </Link>
+      </div>
+    )
+  }
+
+  if (totalGenerated === 0) {
+    return (
+      <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.07)]">
+        <div className="w-10 h-10 rounded-full bg-[rgba(201,168,76,0.15)] border border-[rgba(201,168,76,0.3)] text-[#C9A84C] font-bold text-sm flex items-center justify-center shrink-0">
+          1
+        </div>
+        <div className="flex-1">
+          <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">Start with Therapia</p>
+          <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-0.5">Upload logo → generate plan → approve → publishes automatically</p>
+        </div>
+        <Link href="/projects/therapia" className="shrink-0 font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] px-4 py-2 rounded-xl min-h-[44px] flex items-center hover:bg-[rgba(201,168,76,0.08)] transition-colors">
+          Set up →
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-6 flex items-center gap-3 px-5 py-3 rounded-xl bg-[rgba(16,185,129,0.06)] border border-[rgba(16,185,129,0.15)]">
+      <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+      <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)]">
+        System running — next plan generates Monday 8AM Riyadh
+      </p>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const [activeJob, setActiveJob] = useState<{ jobId: string; project: string; mode: string } | null>(null)
   const [jobResult, setJobResult] = useState<JobStatus | null>(null)
@@ -172,6 +231,9 @@ export default function DashboardPage() {
 
   // Show status bar as soon as button is clicked (activeJob set), not just when polling starts
   const isRunning = polling || (activeJob !== null && !jobResult)
+  const totalGenerated = metrics?.total_assets_generated ?? 0
+  const pendingApprovals = metrics?.pending_approvals ?? 0
+  const isNewUser = !metricsLoading && totalGenerated === 0
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
@@ -189,42 +251,31 @@ export default function DashboardPage() {
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 pb-8">
 
-        {/* Stats */}
-        <AnimatedContent delay={100}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            {[
-              { icon: Clock, label: 'Pending Approvals', value: metrics?.pending_approvals ?? 0, accent: (metrics?.pending_approvals ?? 0) > 0 ? '#C9A84C' : 'rgba(201,168,76,0.75)' },
-              { icon: CheckCircle, label: 'Published This Week', value: metrics?.published_assets ?? 0, accent: (metrics?.published_assets ?? 0) > 0 ? '#10B981' : '#F8F6F1' },
-              { icon: TrendingUp, label: 'Total Assets', value: metrics?.total_assets_generated ?? 0, accent: '#F8F6F1' },
-              { icon: LayoutDashboard, label: 'Active Projects', value: projects.length, accent: '#C9A84C' },
-            ].map(({ icon: Icon, label, value, accent }, index) => (
-              <Card key={label} className={`relative overflow-hidden border ${index === 0 ? 'border-[rgba(201,168,76,0.18)]' : 'border-[rgba(255,255,255,0.06)]'}`}>
-                <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[rgba(201,168,76,0.18)] to-transparent" />
-                <Icon size={16} className="mb-2" style={{ color: accent }} />
-                <p className="font-['IBM_Plex_Mono'] text-3xl md:text-[2.1rem] font-bold tracking-tight" style={{ color: accent }}>
-                  {(index === 3 && projectsLoading) || (index < 3 && metricsLoading && !metrics)
-                    ? <Loader2 size={20} className="animate-spin text-[#C9A84C]" />
-                    : <CountUp end={value} />}
-                </p>
-                <p className="font-['IBM_Plex_Sans'] text-[10px] uppercase tracking-[0.18em] text-[rgba(248,246,241,0.45)] mt-2 leading-snug">{label}</p>
-              </Card>
-            ))}
-          </div>
-        </AnimatedContent>
+        <TodaysFocus pendingApprovals={pendingApprovals} totalGenerated={totalGenerated} loading={metricsLoading} />
 
-        {!metricsLoading && (metrics?.total_assets_generated ?? 0) === 0 && (
-          <AnimatedContent delay={150}>
-            <div className="mb-6 rounded-xl border border-[rgba(201,168,76,0.2)] bg-[rgba(201,168,76,0.05)] px-5 py-4 flex items-start gap-4">
-              <div className="w-8 h-8 rounded-full bg-[#C9A84C] text-[#0A0A0A] flex items-center justify-center font-bold text-sm shrink-0">1</div>
-              <div>
-                <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1] mb-1">Start with Therapia</p>
-                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)]">
-                  Upload your logo, generate a weekly plan, approve content, and it publishes automatically.
-                </p>
-                <Link href="/projects/therapia" className="inline-block mt-2 font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] hover:underline">
-                  Set up Therapia →
-                </Link>
-              </div>
+        {!isNewUser && (
+          <AnimatedContent delay={100}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+              {[
+                { icon: Clock, label: 'Pending Approvals', value: pendingApprovals, accent: pendingApprovals > 0 ? '#C9A84C' : 'rgba(201,168,76,0.75)' },
+                { icon: CheckCircle, label: 'Published This Week', value: metrics?.published_assets ?? 0, accent: (metrics?.published_assets ?? 0) > 0 ? '#10B981' : '#F8F6F1' },
+                { icon: TrendingUp, label: 'Total Assets', value: totalGenerated, accent: '#F8F6F1' },
+                { icon: LayoutDashboard, label: 'Active Projects', value: projects.length, accent: '#C9A84C' },
+              ].map(({ icon: Icon, label, value, accent }, index) => (
+                <Card
+                  key={label}
+                  className={`relative overflow-hidden border ${index === 0 ? 'border-[rgba(201,168,76,0.18)]' : 'border-[rgba(255,255,255,0.06)]'} ${index >= 2 ? 'hidden md:block' : ''}`}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[rgba(201,168,76,0.18)] to-transparent" />
+                  <Icon size={16} className="mb-2" style={{ color: accent }} />
+                  <p className="font-['IBM_Plex_Mono'] text-3xl md:text-[2.1rem] font-bold tracking-tight" style={{ color: accent }}>
+                    {(index === 3 && projectsLoading) || (index < 3 && metricsLoading && !metrics)
+                      ? <Loader2 size={20} className="animate-spin text-[#C9A84C]" />
+                      : <CountUp end={value} />}
+                  </p>
+                  <p className="font-['IBM_Plex_Sans'] text-[10px] uppercase tracking-[0.18em] text-[rgba(248,246,241,0.45)] mt-2 leading-snug">{label}</p>
+                </Card>
+              ))}
             </div>
           </AnimatedContent>
         )}
