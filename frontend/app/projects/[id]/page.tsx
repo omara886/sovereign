@@ -71,7 +71,21 @@ const FILE_TYPES = [
   { key: 'other', label: 'Other', icon: FileText, accept: '*/*', hint: 'Any file · Max 10MB' },
 ]
 
-const TABS = ['Assets', 'Memory', 'Pipeline']
+const TABS = ['Assets', 'Memory', 'Pipeline', 'Analytics']
+
+type AnalyticsAsset = {
+  asset_id: string
+  channel: string
+  type: string
+  published_at: string | null
+  platform_post_id: string | null
+  thumbnail_url: string | null
+  metrics: {
+    impressions: number
+    clicks: number
+    engagement_rate: number
+  }
+}
 
 export default function ProjectPage() {
   const params = useParams()
@@ -95,6 +109,9 @@ export default function ProjectPage() {
   const [planError, setPlanError] = useState('')
   const [approvalBusy, setApprovalBusy] = useState(false)
   const [approvalMessage, setApprovalMessage] = useState('')
+  const [analyticsAssets, setAnalyticsAssets] = useState<AnalyticsAsset[]>([])
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [analyticsError, setAnalyticsError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -133,11 +150,32 @@ export default function ProjectPage() {
     }
   }, [slug])
 
+  const loadAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true)
+    setAnalyticsError('')
+    try {
+      const res = await fetch(`${API}/metrics/assets?project_slug=${slug}&limit=20`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setAnalyticsAssets(await res.json())
+    } catch (err: unknown) {
+      setAnalyticsAssets([])
+      setAnalyticsError(err instanceof Error ? err.message : 'Could not load analytics')
+    } finally {
+      setAnalyticsLoading(false)
+    }
+  }, [slug])
+
   useEffect(() => {
     if (tab === 'Pipeline') {
       void loadCurrentPlan()
     }
   }, [tab, loadCurrentPlan])
+
+  useEffect(() => {
+    if (tab === 'Analytics') {
+      void loadAnalytics()
+    }
+  }, [tab, loadAnalytics])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -605,6 +643,108 @@ export default function ProjectPage() {
             </AnimatedContent>
           </div>
         )}
+
+        {/* ── ANALYTICS TAB ── */}
+        {tab === 'Analytics' && (
+          <div className="space-y-4">
+            <AnimatedContent delay={0}>
+              <Card>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">Project Analytics</h2>
+                    <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-1">
+                      Published assets and their latest performance snapshots.
+                    </p>
+                  </div>
+                  <Badge variant="gold">Live</Badge>
+                </div>
+
+                {analyticsLoading && (
+                  <div className="flex items-center gap-2 text-sm text-[rgba(248,246,241,0.45)] font-['IBM_Plex_Sans'] py-4">
+                    <Loader2 size={15} className="animate-spin text-[#C9A84C]" />
+                    Loading analytics...
+                  </div>
+                )}
+
+                {analyticsError && (
+                  <p className="font-['IBM_Plex_Sans'] text-sm text-[#EF4444]">{analyticsError}</p>
+                )}
+
+                {!analyticsLoading && !analyticsError && analyticsAssets.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-[rgba(201,168,76,0.18)] bg-[rgba(201,168,76,0.04)] px-4 py-4">
+                    <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">
+                      Analytics update every Sunday 6PM. Check back after first publish.
+                    </p>
+                  </div>
+                )}
+
+                {analyticsAssets.length > 0 && (
+                  <div className="space-y-4">
+                    {(() => {
+                      const top = [...analyticsAssets].sort((a, b) => {
+                        const aScore = (a.metrics.engagement_rate || 0) * 1000 + (a.metrics.impressions || 0)
+                        const bScore = (b.metrics.engagement_rate || 0) * 1000 + (b.metrics.impressions || 0)
+                        return bScore - aScore
+                      })[0]
+                      return (
+                        <div className="rounded-xl border border-[rgba(201,168,76,0.15)] bg-[rgba(255,255,255,0.02)] p-4">
+                          <p className="font-['IBM_Plex_Sans'] text-xs uppercase tracking-[0.18em] text-[rgba(248,246,241,0.35)] mb-2">Top Performer</p>
+                          <div className="flex items-start gap-3">
+                            <div className="w-20 shrink-0">
+                              <ProjectAssetThumb url={top.thumbnail_url || ''} type={top.type} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">{top.channel} · {top.type}</p>
+                              <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] mt-1">
+                                Engagement {top.metrics.engagement_rate} · Impressions {top.metrics.impressions}
+                              </p>
+                              {top.published_at && (
+                                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-1">
+                                  Published {new Date(top.published_at).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    <div className="space-y-3">
+                      {analyticsAssets.map(asset => (
+                        <div key={asset.asset_id} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-20 shrink-0">
+                              <ProjectAssetThumb url={asset.thumbnail_url || ''} type={asset.type} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-2">
+                                <Badge variant="channel">{asset.channel}</Badge>
+                                <Badge variant="default">{asset.type}</Badge>
+                              </div>
+                              <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)]">
+                                {asset.published_at ? `Published ${new Date(asset.published_at).toLocaleString()}` : 'Published asset'}
+                              </p>
+                              <div className="mt-3 grid grid-cols-3 gap-2">
+                                <MetricPill label="Impr." value={asset.metrics.impressions} />
+                                <MetricPill label="Clicks" value={asset.metrics.clicks} />
+                                <MetricPill label="Eng." value={`${asset.metrics.engagement_rate}%`} />
+                              </div>
+                              {asset.platform_post_id && (
+                                <p className="font-['IBM_Plex_Mono'] text-[10px] text-[rgba(248,246,241,0.35)] mt-3 break-all">
+                                  {asset.platform_post_id}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </AnimatedContent>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -616,6 +756,15 @@ function Row({ label, value }: { label: string; value: string | undefined }) {
     <div className="border-b border-[rgba(255,255,255,0.04)] pb-2 last:border-0">
       <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">{label}</p>
       <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.8)] mt-0.5">{value}</p>
+    </div>
+  )
+}
+
+function MetricPill({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-lg bg-[rgba(255,255,255,0.03)] px-3 py-2">
+      <p className="font-['IBM_Plex_Sans'] text-[10px] uppercase tracking-[0.14em] text-[rgba(248,246,241,0.35)]">{label}</p>
+      <p className="font-['IBM_Plex_Mono'] text-xs text-[#F8F6F1] mt-1">{value}</p>
     </div>
   )
 }
