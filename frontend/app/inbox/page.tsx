@@ -29,7 +29,6 @@ export default function InboxPage() {
       const res = await fetch(`${API}/api/approvals?status=pending`)
       if (!res.ok) throw new Error('API error')
       const data: Approval[] = await res.json()
-      console.log('inbox approvals', data.map(a => ({ id: a.id, decision: a.decision, status: (a as Approval & { status?: string }).status })))
       setApprovals(data)
       const assetMap: Record<string, Asset> = {}
       await Promise.all(

@@ -56,7 +56,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="mt-4 flex items-center gap-2 text-[rgba(248,246,241,0.45)]">
               <BarChart3 size={16} className="text-[#C9A84C]" />
-              <p className="font-['IBM_Plex_Sans'] text-sm">Real values from `metric_snapshots` are loaded through the backend summary endpoint.</p>
+              <p className="font-['IBM_Plex_Sans'] text-sm">Metrics populate as assets are published. Run the pipeline to get started.</p>
             </div>
           </Card>
         </AnimatedContent>
