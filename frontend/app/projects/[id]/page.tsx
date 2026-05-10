@@ -10,6 +10,7 @@ const API = '/api/proxy'
 
 function proxyImg(url: string | null) {
   if (!url) return null
+  if (url.startsWith("data:")) return url // base64 data URL — render directly
   if (url.startsWith('file://') || url.includes('railway.app') || url.includes('localhost:8000'))
     return `/api/img?url=${encodeURIComponent(url)}`
   return url

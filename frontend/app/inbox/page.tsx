@@ -15,6 +15,7 @@ interface Asset { id: string; type: string; channel: string; language: string; c
 
 function proxyImg(url: string | null) {
   if (!url) return null
+  if (url.startsWith("data:")) return url // base64 data URL — render directly
   if (url.startsWith('file://') || url.includes('railway.app') || url.includes('localhost'))
     return `/api/img?url=${encodeURIComponent(url)}`
   return url

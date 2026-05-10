@@ -1,3 +1,4 @@
+import base64
 import io
 from pathlib import Path
 
@@ -8,20 +9,21 @@ from app.config import get_settings
 
 settings = get_settings()
 
-_LOCAL_FALLBACK = Path("/tmp/sovereign_r2")
+# Max size to store as base64 in DB (user uploads: logos, screenshots)
+# Larger files (AI-generated designs) still use /tmp serve
+_MAX_BASE64_BYTES = 300 * 1024  # 300 KB
+
+_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/svg+xml"}
 
 
 def _get_client():
-    """Return boto3 S3 client configured for Cloudflare R2. Returns None if any credential is missing or invalid."""
+    """Return boto3 S3 client for Cloudflare R2. None if credentials missing or invalid."""
     account_id = (settings.R2_ACCOUNT_ID or "").strip()
     access_key = (settings.R2_ACCESS_KEY_ID or "").strip()
     secret_key = (settings.R2_SECRET_ACCESS_KEY or "").strip()
-
-    # Require all three — and account_id must look like a Cloudflare ID (not an email)
     if not account_id or not access_key or not secret_key:
         return None
     if "@" in account_id or "." in account_id:
-        # Misconfigured — account ID should be a hex string, not an email/URL
         return None
     try:
         return boto3.client(
@@ -37,11 +39,17 @@ def _get_client():
 
 
 async def upload_to_r2(file_bytes: bytes, filename: str, content_type: str = "application/octet-stream") -> str:
-    """Upload to Cloudflare R2. Falls back to /tmp if credentials not set."""
+    """
+    Upload strategy:
+    1. Real R2 bucket → returns public CDN URL (permanent)
+    2. Small image without R2 → base64 data URL stored in DB (permanent, survives restarts)
+    3. Large file without R2 → /tmp serve URL (ephemeral, breaks on restart — use R2)
+    """
     client = _get_client()
     bucket = settings.R2_BUCKET_NAME
     public_base = settings.R2_PUBLIC_URL or ""
 
+    # Strategy 1: Real R2
     if client and bucket:
         import asyncio
         await asyncio.to_thread(
@@ -53,8 +61,13 @@ async def upload_to_r2(file_bytes: bytes, filename: str, content_type: str = "ap
         )
         return f"{public_base.rstrip('/')}/{filename}"
 
-    # Local fallback — create subdirs since filename includes slashes e.g. therapia/logo/uuid.png
-    target = _LOCAL_FALLBACK / filename
+    # Strategy 2: Small image → base64 data URL (permanent, no file system)
+    if content_type in _IMAGE_TYPES and len(file_bytes) <= _MAX_BASE64_BYTES:
+        b64 = base64.b64encode(file_bytes).decode("utf-8")
+        return f"data:{content_type};base64,{b64}"
+
+    # Strategy 3: Large or non-image file → /tmp serve (breaks on restart)
+    target = Path("/tmp/sovereign_r2") / filename
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(file_bytes)
     backend_base = settings.BACKEND_PUBLIC_URL or "https://backend-production-37a17.up.railway.app"
@@ -62,7 +75,6 @@ async def upload_to_r2(file_bytes: bytes, filename: str, content_type: str = "ap
 
 
 def get_signed_url(filename: str, expiry_seconds: int = 3600) -> str:
-    """Generate presigned URL for private R2 object."""
     client = _get_client()
     bucket = settings.R2_BUCKET_NAME
     if client and bucket:
