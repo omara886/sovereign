@@ -149,6 +149,7 @@ export default function InboxPage() {
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<{ approval: Approval; asset: Asset | null } | null>(null)
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
+  const [bulkProgress, setBulkProgress] = useState('')
 
   const fetchProjects = useCallback(async () => {
     const res = await fetch(`${API}/projects`)
@@ -218,6 +219,17 @@ export default function InboxPage() {
     if (ok) setToast({ msg: 'Feedback saved — the AI will avoid this pattern next time', color: 'success' })
   }
 
+  const approveAll = async () => {
+    if (pending.length <= 1) return
+    setBulkProgress(`Approving 0/${pending.length}...`)
+    for (let i = 0; i < pending.length; i += 1) {
+      setBulkProgress(`Approving ${i + 1}/${pending.length}...`)
+      await decideApproval(pending[i].id, 'approved')
+    }
+    setBulkProgress('')
+    setToast({ msg: `All ${pending.length} assets approved and scheduled`, color: 'success' })
+  }
+
   const pending = approvals.filter(a => a.decision == null)
   const hasPublished = publishedJobs.length > 0
   const activePublishedJobs = useMemo(() => {
@@ -261,6 +273,18 @@ export default function InboxPage() {
               className={`shrink-0 font-['IBM_Plex_Sans'] text-sm px-4 py-2 rounded-full border transition-all min-h-[40px] ${filter === f ? 'bg-[rgba(201,168,76,0.15)] border-[rgba(201,168,76,0.4)] text-[#C9A84C]' : 'border-[rgba(255,255,255,0.08)] text-[rgba(248,246,241,0.5)]'}`}>{f}</button>
           ))}
         </div>
+
+        {!loading && !error && pending.length > 1 && (
+          <AnimatedContent delay={40}>
+            <button
+              onClick={() => void approveAll()}
+              disabled={!!bulkProgress || deciding !== null}
+              className="w-full flex items-center justify-center gap-2 mb-4 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#0A0A0A] bg-[#C9A84C] hover:bg-[#E8C97A] rounded-xl py-3 min-h-[48px] transition-all disabled:opacity-40"
+            >
+              {bulkProgress || `Approve All (${pending.length})`}
+            </button>
+          </AnimatedContent>
+        )}
 
         {toast && (
           <AnimatedContent delay={0}>
