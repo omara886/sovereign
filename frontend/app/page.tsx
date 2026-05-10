@@ -25,8 +25,32 @@ type MetricsSummary = {
   pending_approvals: number
   total_assets_generated: number
 }
+type WeeklySummaryItem = {
+  name: string
+  slug: string
+  learnings: string
+  top_asset_url: string | null
+}
 
 const JOB_KEY = 'sovereign_active_job'
+
+function proxyImg(url: string | null) {
+  if (!url) return null
+  if (url.startsWith('data:')) return url
+  if (url.startsWith('file://') || url.includes('railway.app') || url.includes('localhost:8000')) {
+    return `/api/img?url=${encodeURIComponent(url)}`
+  }
+  return url
+}
+
+function splitLearnings(text: string) {
+  return text
+    .replace(/\r/g, '')
+    .split(/\n|•|;|\.\s+/)
+    .map(part => part.trim().replace(/^[-*]\s*/, ''))
+    .filter(Boolean)
+    .slice(0, 3)
+}
 
 export default function DashboardPage() {
   const [activeJob, setActiveJob] = useState<{ jobId: string; project: string; mode: string } | null>(null)
@@ -34,6 +58,8 @@ export default function DashboardPage() {
   const [polling, setPolling] = useState(false)
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
+  const [weeklySummary, setWeeklySummary] = useState<WeeklySummaryItem[]>([])
+  const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(true)
 
   const loadMetrics = useCallback(async () => {
     try {
@@ -45,6 +71,20 @@ export default function DashboardPage() {
       // keep prior data on transient failures
     } finally {
       setMetricsLoading(false)
+    }
+  }, [])
+
+  const loadWeeklySummary = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/metrics/weekly-summary`)
+      if (res.ok) {
+        const data = await res.json()
+        setWeeklySummary(data.projects || [])
+      }
+    } catch {
+      // ignore transient errors
+    } finally {
+      setWeeklySummaryLoading(false)
     }
   }, [])
 
@@ -62,11 +102,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void loadMetrics()
+    void loadWeeklySummary()
     const interval = window.setInterval(() => {
       void loadMetrics()
     }, 60000)
     return () => window.clearInterval(interval)
-  }, [loadMetrics])
+  }, [loadMetrics, loadWeeklySummary])
 
   const triggerPipeline = async (slug: string, mode: 'plan' | 'run') => {
     setJobResult(null)
@@ -235,6 +276,59 @@ export default function DashboardPage() {
             </p>
           </div>
         </AnimatedContent>
+
+        {!weeklySummaryLoading && weeklySummary.length > 0 && (
+          <AnimatedContent delay={600}>
+            <Card className="mt-6">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1]">This Week&apos;s Insights</h2>
+                  <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-1">
+                    Learning loops from the latest performance review.
+                  </p>
+                </div>
+                <Badge variant="gold">Weekly Summary</Badge>
+              </div>
+
+              <div className="space-y-4">
+                {weeklySummary.map(project => {
+                  const bullets = splitLearnings(project.learnings)
+                  return (
+                    <div key={project.slug} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] p-4">
+                      <div className="flex items-start gap-3">
+                        {project.top_asset_url ? (
+                          <div className="w-16 h-16 rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)] shrink-0">
+                            <img
+                              src={proxyImg(project.top_asset_url) || project.top_asset_url}
+                              alt={`${project.name} best asset`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <h3 className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-semibold">{project.name}</h3>
+                            <Badge variant="channel">Best asset</Badge>
+                          </div>
+                          <ul className="space-y-1">
+                            {bullets.map((bullet, index) => (
+                              <li key={`${project.slug}-${index}`} className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.7)] leading-relaxed flex gap-2">
+                                <span className="text-[#C9A84C]">•</span>
+                                <span>{bullet}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          </AnimatedContent>
+        )}
       </div>
     </div>
   )

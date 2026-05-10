@@ -9,6 +9,7 @@ from app.models.asset import Asset
 from app.models.approval import Approval
 from app.models.metric_snapshot import MetricSnapshot
 from app.models.project import Project
+from app.models.project_memory import ProjectMemory
 from app.models.publish_job import PublishJob
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
@@ -93,3 +94,39 @@ async def get_asset_metrics(
         )
 
     return results
+
+
+@router.get("/weekly-summary")
+async def weekly_summary(db: AsyncSession = Depends(get_db)):
+    rows = (
+        await db.execute(
+            select(Project, ProjectMemory)
+            .join(ProjectMemory, ProjectMemory.project_id == Project.id)
+            .where(Project.status == "active", ProjectMemory.performance_learnings.is_not(None))
+            .order_by(Project.priority.asc(), Project.name.asc())
+        )
+    ).all()
+
+    projects: list[dict] = []
+    for project, memory in rows:
+        learnings = (memory.performance_learnings or "").strip()
+        if not learnings:
+            continue
+        latest_asset = (
+            await db.execute(
+                select(Asset)
+                .where(Asset.project_id == project.id, Asset.status == "published")
+                .order_by(desc(Asset.updated_at), desc(Asset.created_at))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        projects.append(
+            {
+                "name": project.name,
+                "slug": project.slug,
+                "learnings": learnings,
+                "top_asset_url": (latest_asset.design_thumbnail_url or latest_asset.design_url) if latest_asset else None,
+            }
+        )
+
+    return {"projects": projects}
