@@ -7,6 +7,7 @@ import CountUp from '@/components/react-bits/CountUp'
 import SpotlightCard from '@/components/react-bits/SpotlightCard'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { ProjectImage } from '@/components/ui/ProjectImage'
 import Link from 'next/link'
 import { CheckCircle, Clock, LayoutDashboard, Loader2, Play, TrendingUp, Zap } from 'lucide-react'
 
@@ -35,15 +36,6 @@ type WeeklySummaryItem = {
 }
 
 const JOB_KEY = 'sovereign_active_job'
-
-function proxyImg(url: string | null) {
-  if (!url) return null
-  if (url.startsWith('data:')) return url
-  if (url.startsWith('file://') || url.includes('railway.app') || url.includes('localhost:8000')) {
-    return `/api/img?url=${encodeURIComponent(url)}`
-  }
-  return url
-}
 
 function splitLearnings(text: string) {
   return text
@@ -394,13 +386,11 @@ export default function DashboardPage() {
                     <div key={project.slug} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] p-4">
                       <div className="flex items-start gap-3">
                         {project.top_asset_url ? (
-                          <div className="w-16 h-16 rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)] shrink-0">
-                            <img
-                              src={proxyImg(project.top_asset_url) || project.top_asset_url}
-                              alt={`${project.name} best asset`}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
+                          <ProjectImage
+                            url={project.top_asset_url}
+                            alt={`${project.name} best asset`}
+                            className="w-16 h-16 rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)] shrink-0"
+                          />
                         ) : (
                           <div className="w-16 h-16 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] shrink-0" />
                         )}

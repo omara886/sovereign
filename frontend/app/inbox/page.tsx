@@ -4,18 +4,13 @@ import Link from 'next/link'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { ProjectImage } from '@/components/ui/ProjectImage'
 import { SwipeActions } from '@/components/inbox/SwipeActions'
-import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, ImageOff, Eye } from 'lucide-react'
+import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, Eye } from 'lucide-react'
 
 const FILTERS = ['All', 'Therapia', 'Qawwi', 'ProductBench', 'SahmAlgo']
 const CHANNEL_LABELS: Record<string, string> = {
   instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X / Twitter', google_ads: 'Google Ads'
-}
-const CHANNEL_ACCENTS: Record<string, string> = {
-  instagram: 'rgba(225,48,108,0.18)',
-  linkedin: 'rgba(0,119,181,0.18)',
-  x: 'rgba(29,161,242,0.18)',
-  google_ads: 'rgba(66,133,244,0.18)',
 }
 const API = '/api/proxy'
 
@@ -31,34 +26,6 @@ const PROJECT_FILTERS: Record<string, string> = {
   SahmAlgo: 'sahmalgo',
 }
 
-function channelAccent(channel: string | null | undefined) {
-  return CHANNEL_ACCENTS[channel || ''] || 'rgba(201,168,76,0.14)'
-}
-
-function proxyImg(url: string | null) {
-  if (!url) return null
-  if (url.startsWith("data:")) return url // base64 data URL — render directly
-  if (url.startsWith('file://') || url.includes('railway.app') || url.includes('localhost'))
-    return `/api/img?url=${encodeURIComponent(url)}`
-  return url
-}
-
-function Thumb({ url, size = 'sm' }: { url: string | null; size?: 'sm' | 'lg' }) {
-  const [broken, setBroken] = useState(false)
-  const src = proxyImg(url)
-  const cls = size === 'lg' ? 'w-full aspect-video rounded-xl' : 'w-20 h-20 rounded-xl shrink-0'
-  if (!src || broken) return (
-    <div className={`${cls} bg-[#0A0A0A] border border-[rgba(255,255,255,0.06)] flex items-center justify-center`}>
-      <ImageOff size={size === 'lg' ? 32 : 20} className="text-[rgba(248,246,241,0.1)]" />
-    </div>
-  )
-  return (
-    <div className={`${cls} bg-[#0A0A0A] overflow-hidden border border-[rgba(201,168,76,0.1)]`}>
-      <img src={src} alt="" className="w-full h-full object-cover" onError={() => setBroken(true)} />
-    </div>
-  )
-}
-
 function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }: {
   approval: Approval; asset: Asset | null; deciding: boolean;
   onApprove: () => Promise<void>; onReject: (reason: string) => Promise<void>; onClose: () => void;
@@ -70,7 +37,7 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[20px] p-[2px] border border-[rgba(255,255,255,0.06)]" style={{
-        background: `linear-gradient(135deg, ${channelAccent(asset?.channel)}, rgba(10,10,10,0.2) 55%, transparent)`,
+        background: 'linear-gradient(135deg, rgba(201,168,76,0.14), rgba(10,10,10,0.2) 55%, transparent)',
       }}>
         <div className="rounded-[18px] bg-[#1E293B]">
           <div className="flex items-center justify-between p-5 border-b border-[rgba(255,255,255,0.06)]">
@@ -89,7 +56,12 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }
 
           {(asset?.design_url || asset?.design_thumbnail_url) && (
             <div className="px-5 pt-5">
-              <Thumb url={asset.design_url || asset.design_thumbnail_url} size="lg" />
+              <ProjectImage
+                url={asset.design_url || asset.design_thumbnail_url}
+                alt=""
+                className="w-full aspect-video rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)]"
+                fallbackSize={32}
+              />
             </div>
           )}
 
@@ -334,7 +306,15 @@ export default function InboxPage() {
           <div className="space-y-3 pb-4">
             {pending.map((approval, i) => {
               const asset = approval.asset_id ? assets[approval.asset_id] : null
-              const accent = channelAccent(asset?.channel)
+              const accent = asset?.channel === 'instagram'
+                ? 'rgba(225,48,108,0.18)'
+                : asset?.channel === 'linkedin'
+                ? 'rgba(0,119,181,0.18)'
+                : asset?.channel === 'x'
+                ? 'rgba(29,161,242,0.18)'
+                : asset?.channel === 'google_ads'
+                ? 'rgba(66,133,244,0.18)'
+                : 'rgba(201,168,76,0.14)'
               return (
                 <AnimatedContent key={approval.id} delay={i * 60}>
                   <SwipeActions
@@ -344,7 +324,11 @@ export default function InboxPage() {
                     <div className="rounded-[20px] p-[2px]" style={{ background: `linear-gradient(135deg, ${accent}, rgba(10,10,10,0.2) 65%, transparent)` }}>
                       <Card className="bg-[#111827]">
                         <div className="flex gap-3">
-                          <Thumb url={asset?.design_thumbnail_url ?? null} />
+                          <ProjectImage
+                            url={asset?.design_thumbnail_url ?? null}
+                            alt=""
+                            className="w-20 h-20 rounded-xl shrink-0 overflow-hidden border border-[rgba(201,168,76,0.1)]"
+                          />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2 flex-wrap">
                               <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">

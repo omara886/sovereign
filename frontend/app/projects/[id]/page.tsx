@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { ProjectImage } from '@/components/ui/ProjectImage'
 import { Upload, Image, Type, Palette, FileText, Check, Loader2, Brain, Zap, Play, Sparkles } from 'lucide-react'
 
 const API = '/api/proxy'
@@ -33,34 +34,6 @@ type WeeklyPlan = {
   risk_flags: string[]
   status: string
   approval_id?: string | null
-}
-
-function proxyImg(url: string | null) {
-  if (!url) return null
-  if (url.startsWith("data:")) return url // base64 data URL — render directly
-  if (url.startsWith('file://') || url.includes('railway.app') || url.includes('localhost:8000'))
-    return `/api/img?url=${encodeURIComponent(url)}`
-  return url
-}
-
-function ProjectAssetThumb({ url, type }: { url: string; type: string }) {
-  const [broken, setBroken] = useState(false)
-  if (type === 'font') return (
-    <div className="aspect-square rounded-xl bg-[#0A0A0A] flex items-center justify-center">
-      <Type size={28} className="text-[#C9A84C]" />
-    </div>
-  )
-  const src = proxyImg(url)
-  if (!src || broken) return (
-    <div className="aspect-square rounded-xl bg-[#0A0A0A] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
-      <Image size={20} className="text-[rgba(248,246,241,0.15)]" />
-    </div>
-  )
-  return (
-    <div className="aspect-square rounded-xl bg-[#0A0A0A] overflow-hidden flex items-center justify-center">
-      <img src={src} alt="" className="w-full h-full object-contain p-2" onError={() => setBroken(true)} />
-    </div>
-  )
 }
 
 const FILE_TYPES = [
@@ -345,7 +318,17 @@ export default function ProjectPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {uploads.map((file, i) => (
                     <Card key={i}>
-                      <ProjectAssetThumb url={file.url} type={file.type} />
+                      {file.type === 'font' ? (
+                        <div className="aspect-square rounded-xl bg-[#0A0A0A] flex items-center justify-center">
+                          <Type size={28} className="text-[#C9A84C]" />
+                        </div>
+                      ) : (
+                        <ProjectImage
+                          url={file.url}
+                          alt={file.name}
+                          className="aspect-square rounded-xl overflow-hidden flex items-center justify-center border border-[rgba(255,255,255,0.05)]"
+                        />
+                      )}
                       <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.6)] truncate mt-2">{file.name}</p>
                       <Badge variant="gold" className="mt-1 text-[10px]">{file.type}</Badge>
                     </Card>
@@ -712,7 +695,11 @@ export default function ProjectPage() {
                           <p className="font-['IBM_Plex_Sans'] text-xs uppercase tracking-[0.18em] text-[rgba(248,246,241,0.35)] mb-2">Top Performer</p>
                           <div className="flex items-start gap-3">
                             <div className="w-20 shrink-0">
-                              <ProjectAssetThumb url={top.thumbnail_url || ''} type={top.type} />
+                              <ProjectImage
+                                url={top.thumbnail_url || ''}
+                                alt={`${top.channel} top asset`}
+                                className="w-full aspect-square rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)]"
+                              />
                             </div>
                             <div className="min-w-0">
                               <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">{top.channel} · {top.type}</p>
@@ -735,7 +722,11 @@ export default function ProjectPage() {
                         <div key={asset.asset_id} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] p-4">
                           <div className="flex items-start gap-3">
                             <div className="w-20 shrink-0">
-                              <ProjectAssetThumb url={asset.thumbnail_url || ''} type={asset.type} />
+                              <ProjectImage
+                                url={asset.thumbnail_url || ''}
+                                alt={`${asset.channel} asset`}
+                                className="w-full aspect-square rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)]"
+                              />
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2 mb-2">
