@@ -8,6 +8,33 @@ import { Upload, Image, Type, Palette, FileText, Check, Loader2, Brain, Zap, Pla
 
 const API = '/api/proxy'
 
+function proxyImg(url: string | null) {
+  if (!url) return null
+  if (url.startsWith('file://') || url.includes('railway.app') || url.includes('localhost:8000'))
+    return `/api/img?url=${encodeURIComponent(url)}`
+  return url
+}
+
+function ProjectAssetThumb({ url, type }: { url: string; type: string }) {
+  const [broken, setBroken] = useState(false)
+  if (type === 'font') return (
+    <div className="aspect-square rounded-xl bg-[#0A0A0A] flex items-center justify-center">
+      <Type size={28} className="text-[#C9A84C]" />
+    </div>
+  )
+  const src = proxyImg(url)
+  if (!src || broken) return (
+    <div className="aspect-square rounded-xl bg-[#0A0A0A] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
+      <Image size={20} className="text-[rgba(248,246,241,0.15)]" />
+    </div>
+  )
+  return (
+    <div className="aspect-square rounded-xl bg-[#0A0A0A] overflow-hidden flex items-center justify-center">
+      <img src={src} alt="" className="w-full h-full object-contain p-2" onError={() => setBroken(true)} />
+    </div>
+  )
+}
+
 const FILE_TYPES = [
   { key: 'logo', label: 'Logo', icon: Image, accept: 'image/png,image/jpeg,image/webp,image/svg+xml', hint: 'PNG, SVG, WebP' },
   { key: 'screenshot', label: 'App Screenshots', icon: FileText, accept: 'image/png,image/jpeg', hint: 'PNG, JPG' },
@@ -179,14 +206,8 @@ export default function ProjectPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {uploads.map((file, i) => (
                     <Card key={i}>
-                      <div className="aspect-square rounded-xl bg-[#0A0A0A] overflow-hidden flex items-center justify-center mb-2">
-                        {file.type !== 'font' ? (
-                          <img src={file.url} alt={file.name}
-                            className="w-full h-full object-contain p-2"
-                            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                        ) : <Type size={28} className="text-[#C9A84C]" />}
-                      </div>
-                      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.6)] truncate">{file.name}</p>
+                      <ProjectAssetThumb url={file.url} type={file.type} />
+                      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.6)] truncate mt-2">{file.name}</p>
                       <Badge variant="gold" className="mt-1 text-[10px]">{file.type}</Badge>
                     </Card>
                   ))}
