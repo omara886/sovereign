@@ -1,4 +1,5 @@
 'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { BarChart3, CalendarDays, FolderKanban, Inbox, LayoutDashboard, LogOut, Settings } from 'lucide-react'
@@ -23,6 +24,26 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const [inboxCount, setInboxCount] = useState(0)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/proxy/approvals?status=pending')
+        if (res.ok) {
+          const data = await res.json()
+          setInboxCount(Array.isArray(data) ? data.length : 0)
+        }
+      } catch {
+        // keep the previous count on transient failures
+      }
+    }
+    void load()
+    const interval = window.setInterval(() => {
+      void load()
+    }, 30000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -54,6 +75,11 @@ export default function Sidebar() {
             >
               <Icon size={18} className="shrink-0" />
               <span className="font-['IBM_Plex_Sans'] text-sm">{label}</span>
+              {label === 'Inbox' && inboxCount > 0 && (
+                <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">
+                  {inboxCount}
+                </span>
+              )}
               {isActive(href) && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#C9A84C]" />}
             </Link>
           ))}
@@ -74,12 +100,17 @@ export default function Sidebar() {
         <div className="flex items-center justify-around px-1 pt-2">
           {NAV_ITEMS.slice(0, 4).map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}
-              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl min-w-[60px] min-h-[52px] justify-center transition-colors duration-200 ${
+              className={`relative flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl min-w-[60px] min-h-[52px] justify-center transition-colors duration-200 ${
                 isActive(href) ? 'text-[#C9A84C]' : 'text-[rgba(248,246,241,0.35)]'
               }`}
             >
               <Icon size={22} />
               <span className="font-['IBM_Plex_Sans'] text-[10px] leading-tight">{label}</span>
+              {label === 'Inbox' && inboxCount > 0 && (
+                <span className="absolute top-1 right-2 min-w-4 h-4 px-1 rounded-full bg-[#EF4444] text-white text-[9px] font-bold flex items-center justify-center">
+                  {inboxCount}
+                </span>
+              )}
             </Link>
           ))}
         </div>
