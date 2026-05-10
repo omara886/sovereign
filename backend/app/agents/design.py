@@ -187,10 +187,14 @@ class DesignAgent(BaseAgent):
             # 2. Generate image
             image_bytes = await generate_image_fal(fal_prompt, "fal-ai/flux/schnell", dims[0], dims[1])
 
-            # 3. Apply text overlay
+            # 3. Apply text overlay — pass real brand colors
             text_ar = f"{copy_ar}\n{cta_ar}".strip() if copy_ar or cta_ar else ""
             text_en = f"{copy_en}\n{cta_en}".strip() if copy_en or cta_en else ""
-            with_text = await apply_text_overlay(image_bytes, text_ar, text_en)
+            with_text = await apply_text_overlay(
+                image_bytes, text_ar, text_en,
+                brand_primary=primary,
+                brand_accent=accent,
+            )
 
             # 4. Create thumbnail and upload both
             thumb = await create_thumbnail(with_text)

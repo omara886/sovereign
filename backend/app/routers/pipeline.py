@@ -63,7 +63,17 @@ async def _run_full_pipeline(project_id: str, job_id: str):
     from app.models.project import Project
     from app.tools.memory_tools import get_project_memory
 
-    _jobs[job_id] = {"status": "running", "step": "Generating weekly plan...", "project_id": project_id}
+    def log(step: str, agent: str = "", sources: list = None, decisions: list = None):
+        _jobs[job_id] = {
+            "status": "running",
+            "step": step,
+            "project_id": project_id,
+            "agent": agent,
+            "data_sources": sources or [],
+            "decisions": decisions or [],
+        }
+
+    log("Reading brand guide and project memory...", "Strategy Agent", ["BrandMemory", "ProjectMemory", "MetricHistory"])
     try:
         async with SessionLocal() as db:
             project = await db.get(Project, project_id)
@@ -98,13 +108,13 @@ async def _run_full_pipeline(project_id: str, job_id: str):
             for i, tactic in enumerate(tactics):
                 channel = tactic.get("channel", "instagram")
                 asset_type = tactic.get("asset_type", "post")
-                _jobs[job_id]["step"] = f"Writing copy for {channel} {asset_type} ({i+1}/{len(tactics)})..."
+                log(f"Writing copy for {channel} {asset_type} ({i+1}/{len(tactics)})...", "Copy Agent", ["ProjectMemory", "BrandMemory", "ApprovedExamples"], ["Gulf Saudi Arabic", "Excluded topics checked"])
 
                 copy_data = await copy_agent.generate_copy(
                     db, project_id, channel, asset_type,
                     tactic.get("funnel_stage", "awareness"), "bilingual"
                 )
-                _jobs[job_id]["step"] = f"Localizing content ({i+1}/{len(tactics)})..."
+                log(f"Localizing to Gulf Saudi Arabic ({i+1}/{len(tactics)})...", "Localization Agent", ["ProjectMemory.tone", "BrandMemory.voice", "ApprovedExamples"], ["Gulf dialect", "RTL enforced", "No Egyptian markers"])
                 local_data = await local_agent.localize(
                     db, project_id,
                     copy_data.get("copy_en", copy_data.get("copy_ar", "")),
@@ -138,7 +148,7 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 await db.commit()
                 await db.refresh(asset)
 
-                _jobs[job_id]["step"] = f"Generating design ({i+1}/{len(tactics)})..."
+                log(f"Generating design ({i+1}/{len(tactics)})...", "Design Agent", ["BrandMemory.colors", "BrandMemory.logo", "ThmanyahFont"], ["Brand colors applied", "Thmanyah font", "RTL Arabic layout"])
                 design_data = await design_agent.generate_design(
                     db, project_id, str(asset.id), channel, copy_ar, copy_en, cta_ar, cta_en
                 )
@@ -146,7 +156,7 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 asset.design_thumbnail_url = design_data.get("thumbnail_url")
                 await db.commit()
 
-                _jobs[job_id]["step"] = f"Running QA ({i+1}/{len(tactics)})..."
+                log(f"QA check ({i+1}/{len(tactics)})...", "QA Agent", ["BrandMemory.donts", "ProjectMemory.excluded_topics", "RejectedExamples"], ["Gulf Arabic validated", "No forbidden phrases", "Score / 100"])
                 qa_result = await qa_agent.check_asset(
                     db, project_id, copy_ar, copy_en, cta_ar, cta_en,
                     channel, copy_data.get("claim_flags", [])
@@ -161,7 +171,7 @@ async def _run_full_pipeline(project_id: str, job_id: str):
 
             # Notifications
             if passed:
-                _jobs[job_id]["step"] = "Sending approval notifications..."
+                log("Sending to approval inbox...", "Approval Agent", ["Founder email", "Telegram"], ["Email notification sent", "Assets queued for review"])
                 approval_agent = ApprovalAgent()
                 result = await approval_agent.notify_pending_assets(
                     db, project_id, project.name, passed

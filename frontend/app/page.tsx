@@ -14,11 +14,19 @@ import { CheckCircle, Clock, LayoutDashboard, Loader2, Play, TrendingUp, Zap } f
 
 const API = '/api/proxy'
 
-type JobStatus = { status: string; step: string; assets_passed_qa?: number; objective?: string; email_sent?: boolean }
 type MetricsSummary = {
   published_assets: number
   pending_approvals: number
   total_assets_generated: number
+}
+type JobStatus = {
+  status: string
+  step: string
+  agent?: string
+  data_sources?: string[]
+  decisions?: string[]
+  assets_passed_qa?: number
+  objective?: string
 }
 type ProjectSummary = {
   id: string
@@ -297,34 +305,54 @@ export default function DashboardPage() {
           </AnimatedContent>
         )}
 
-        {/* Job status bar */}
+        {/* Pipeline status — shows what agent is running + what data it's reading */}
         {(isRunning || jobResult) && (
           <AnimatedContent delay={0}>
-            <div className={`mb-6 rounded-xl px-5 py-4 border flex items-center gap-3 ${
-              jobResult?.status === 'error'
-                ? 'bg-[rgba(239,68,68,0.08)] border-[rgba(239,68,68,0.2)]'
-                : jobResult?.status === 'done'
-                ? 'bg-[rgba(16,185,129,0.08)] border-[rgba(16,185,129,0.2)]'
-                : 'bg-[rgba(201,168,76,0.08)] border-[rgba(201,168,76,0.2)]'
+            <div className={`mb-6 rounded-xl border overflow-hidden ${
+              jobResult?.status === 'error' ? 'border-[rgba(239,68,68,0.2)]'
+              : jobResult?.status === 'done' ? 'border-[rgba(16,185,129,0.2)]'
+              : 'border-[rgba(201,168,76,0.2)]'
             }`}>
-              {isRunning && <Loader2 size={18} className="text-[#C9A84C] animate-spin shrink-0" />}
-              {jobResult?.status === 'done' && <CheckCircle size={18} className="text-[#10B981] shrink-0" />}
-              <div className="flex-1 min-w-0">
-                <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">
-                  {jobResult?.step || 'Starting...'}
-                </p>
-                {jobResult?.status === 'done' && jobResult.objective && (
-                  <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-0.5 line-clamp-1">
-                    {jobResult.objective}
-                  </p>
+              {/* Main status row */}
+              <div className={`flex items-center gap-3 px-4 py-3 ${
+                jobResult?.status === 'error' ? 'bg-[rgba(239,68,68,0.08)]'
+                : jobResult?.status === 'done' ? 'bg-[rgba(16,185,129,0.08)]'
+                : 'bg-[rgba(201,168,76,0.06)]'
+              }`}>
+                {isRunning && <Loader2 size={16} className="text-[#C9A84C] animate-spin shrink-0" />}
+                {jobResult?.status === 'done' && <CheckCircle size={16} className="text-[#10B981] shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    {jobResult?.agent && (
+                      <span className="font-['IBM_Plex_Mono'] text-[10px] text-[#C9A84C] bg-[rgba(201,168,76,0.1)] px-2 py-0.5 rounded-full shrink-0">
+                        {jobResult.agent}
+                      </span>
+                    )}
+                    <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] truncate">
+                      {jobResult?.step || 'Initializing...'}
+                    </p>
+                  </div>
+                </div>
+                {jobResult?.status === 'done' && (
+                  <Link href="/inbox" className="shrink-0 font-['IBM_Plex_Sans'] text-xs font-bold text-[#0A0A0A] bg-[#C9A84C] px-3 py-2 rounded-lg min-h-[36px] flex items-center">
+                    Review →
+                  </Link>
                 )}
               </div>
-              {jobResult?.status === 'done' && (
-                <Link href="/inbox"
-                  className="shrink-0 font-['IBM_Plex_Sans'] text-sm bg-[#C9A84C] text-[#0A0A0A] px-4 py-2 rounded-xl font-bold min-h-[44px] flex items-center"
-                >
-                  Go to Inbox →
-                </Link>
+              {/* Data sources + decisions */}
+              {isRunning && jobResult && ((jobResult.data_sources ?? []).length > 0 || (jobResult.decisions ?? []).length > 0) && (
+                <div className="px-4 py-2 bg-[rgba(0,0,0,0.2)] flex flex-wrap gap-2">
+                  {jobResult.data_sources?.map((s: string) => (
+                    <span key={s} className="font-['IBM_Plex_Mono'] text-[9px] text-[rgba(248,246,241,0.4)] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] px-2 py-0.5 rounded">
+                      📂 {s}
+                    </span>
+                  ))}
+                  {jobResult.decisions?.map((d: string) => (
+                    <span key={d} className="font-['IBM_Plex_Mono'] text-[9px] text-[rgba(201,168,76,0.6)] bg-[rgba(201,168,76,0.06)] border border-[rgba(201,168,76,0.1)] px-2 py-0.5 rounded">
+                      ✓ {d}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           </AnimatedContent>
