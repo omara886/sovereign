@@ -183,6 +183,12 @@ async def analyze_and_update(
 
 
 async def _download_file(url: str) -> bytes | None:
+    if url.startswith("data:"):
+        try:
+            _, encoded = url.split(",", 1)
+            return base64.b64decode(encoded)
+        except Exception:
+            return None
     # Handle local file:// URLs
     if url.startswith("file://"):
         path = Path(url.replace("file://", ""))
