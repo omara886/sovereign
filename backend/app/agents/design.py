@@ -162,19 +162,47 @@ class DesignAgent(BaseAgent):
         cta_ar: str = "",
         cta_en: str = "",
     ) -> dict:
-        platform_key = channel.replace("-", "_").replace(" ", "_") + "_post"
-        dims = PLATFORM_DIMENSIONS.get(platform_key, (1080, 1080))
-        msg = (
-            f"Generate a marketing design for project_id={project_id}, asset_id={asset_id}. "
-            f"Channel: {channel}. Platform dimensions: {dims[0]}x{dims[1]}. "
-            f"Arabic copy: {copy_ar[:100]}. English copy: {copy_en[:100]}. "
-            "Steps: (1) get_brand_memory, (2) generate_image with a brand-consistent prompt, "
-            "(3) apply_text_and_upload. Return design_url and thumbnail_url."
-        )
-        result = await self.run(msg, db)
-        import json
-        start = result.find("{")
-        end = result.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(result[start:end])
-        return {"error": "parse failed", "raw": result}
+        """
+        Direct deterministic pipeline — no Claude needed for design generation.
+        Claude was causing rate limit failures mid-loop, leaving thumbnails as None.
+        """
+        try:
+            platform_key = channel.replace("-", "_").replace(" ", "_") + "_post"
+            dims = PLATFORM_DIMENSIONS.get(platform_key, (1080, 1080))
+
+            # 1. Get brand memory for fal.ai prompt
+            brand_mem = await get_brand_memory(db, project_id)
+            colors = (brand_mem.color_palette or {}) if brand_mem else {}
+            style = (brand_mem.visual_style or "clean, professional, dark background") if brand_mem else "clean, professional"
+            primary = colors.get("primary", "#0A0A0A")
+            accent = colors.get("accent", "#C9A84C")
+
+            fal_prompt = (
+                f"Professional marketing visual. {style}. "
+                f"Color palette: primary {primary}, accent {accent}. "
+                f"Dark background. No text in image — leave 40% clear space at bottom for text overlay. "
+                f"High quality, {dims[0]}x{dims[1]}px."
+            )
+
+            # 2. Generate image
+            image_bytes = await generate_image_fal(fal_prompt, "fal-ai/flux/schnell", dims[0], dims[1])
+
+            # 3. Apply text overlay
+            text_ar = f"{copy_ar}\n{cta_ar}".strip() if copy_ar or cta_ar else ""
+            text_en = f"{copy_en}\n{cta_en}".strip() if copy_en or cta_en else ""
+            with_text = await apply_text_overlay(image_bytes, text_ar, text_en)
+
+            # 4. Create thumbnail and upload both
+            thumb = await create_thumbnail(with_text)
+            design_url = await upload_to_r2(with_text, f"{asset_id}.png", "image/png")
+            thumbnail_url = await upload_to_r2(thumb, f"{asset_id}_thumb.jpg", "image/jpeg")
+
+            return {
+                "design_url": design_url,
+                "thumbnail_url": thumbnail_url,
+                "fal_prompt": fal_prompt,
+                "model_used": "fal-ai/flux/schnell",
+                "notes": ["provisional" if (brand_mem and brand_mem.is_provisional) else "approved brand"],
+            }
+        except Exception as exc:
+            return {"error": str(exc), "design_url": None, "thumbnail_url": None}
