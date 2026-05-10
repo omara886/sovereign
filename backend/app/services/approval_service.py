@@ -49,6 +49,9 @@ async def handle_approval_decision(db: AsyncSession, approval_id: str, decision:
         if plan:
             if decision == "approved":
                 plan.status = "approved"
+                # Auto-trigger full pipeline after plan approval
+                import asyncio
+                asyncio.ensure_future(_trigger_pipeline_after_plan(str(plan.project_id)))
             elif decision == "rejected":
                 plan.status = "rejected"
             elif decision == "edit_requested":
@@ -57,3 +60,15 @@ async def handle_approval_decision(db: AsyncSession, approval_id: str, decision:
     await db.commit()
     await db.refresh(approval)
     return approval
+
+
+async def _trigger_pipeline_after_plan(project_id: str) -> None:
+    """Run copy+design+QA+notify after a plan is approved. Non-blocking."""
+    import uuid
+    from app.routers.pipeline import _run_full_pipeline
+    job_id = str(uuid.uuid4())
+    try:
+        await _run_full_pipeline(project_id, job_id)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("pipeline after plan approval failed: %s", exc)

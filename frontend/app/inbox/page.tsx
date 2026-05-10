@@ -17,6 +17,7 @@ const API = '/api/proxy'
 
 interface Approval { id: string; asset_id: string | null; weekly_plan_id: string | null; decision: string | null; created_at: string }
 interface Asset { id: string; project_id: string; type: string; channel: string; language: string; copy_ar: string | null; copy_en: string | null; design_thumbnail_url: string | null; design_url: string | null; qa_score: number | null; status: string }
+interface WeeklyPlan { id: string; objective: string; funnel_focus: string; rationale: string; tactics: unknown[]; status: string; total_budget_estimate: number }
 interface Project { id: string; slug: string; name: string }
 interface PublishJob { id: string; asset_id: string; approval_id: string; channel: string; scheduled_at: string; published_at: string | null; platform_post_id: string | null; status: string; error_message: string | null }
 
@@ -25,6 +26,29 @@ const PROJECT_FILTERS: Record<string, string> = {
   Qawwi: 'qawwi',
   ProductBench: 'productbench',
   SahmAlgo: 'sahmalgo',
+}
+
+function PlanSummary({ planId }: { planId: string }) {
+  const [plan, setPlan] = useState<WeeklyPlan | null>(null)
+  useEffect(() => {
+    fetch(`${API}/plans/${planId}`).then(r => r.ok ? r.json() : null).then(d => d && setPlan(d))
+  }, [planId])
+  if (!plan) return <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)]">Loading plan...</p>
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-1 uppercase tracking-wider">Weekly Plan</p>
+        <p className="font-['Cormorant_Garamond'] text-lg text-[#F8F6F1]">{plan.objective}</p>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        <Badge variant="gold">{plan.funnel_focus}</Badge>
+        <Badge variant="default">{Array.isArray(plan.tactics) ? plan.tactics.length : 0} tactics</Badge>
+        <Badge variant="default">SAR {Number(plan.total_budget_estimate||0).toLocaleString('en-US')}</Badge>
+      </div>
+      {plan.rationale && <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)] leading-relaxed">{plan.rationale}</p>}
+      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.35)]">Approve this plan to start generating content automatically.</p>
+    </div>
+  )
 }
 
 function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }: {
@@ -78,6 +102,10 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }
                 <p className="font-['Cairo'] text-sm text-[#F8F6F1] leading-relaxed" dir="rtl">{asset.copy_ar}</p>
               </div>
             )}
+            {/* Plan approval — show plan details */}
+            {!asset && approval.weekly_plan_id && (
+              <PlanSummary planId={approval.weekly_plan_id} />
+            )}
           </div>
 
           {showReject && (
@@ -128,12 +156,13 @@ export default function InboxPage() {
   const [filter, setFilter] = useState('All')
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [assets, setAssets] = useState<Record<string, Asset>>({})
+  const [plans, setPlans] = useState<Record<string, WeeklyPlan>>({})
   const [projects, setProjects] = useState<Project[]>([])
   const [publishedJobs, setPublishedJobs] = useState<PublishJob[]>([])
   const [loading, setLoading] = useState(true)
   const [deciding, setDeciding] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [selected, setSelected] = useState<{ approval: Approval; asset: Asset | null } | null>(null)
+  const [selected, setSelected] = useState<{ approval: Approval; asset: Asset | null; plan: WeeklyPlan | null } | null>(null)
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
   const [bulkProgress, setBulkProgress] = useState('')
 
@@ -150,11 +179,19 @@ export default function InboxPage() {
       const data: Approval[] = await res.json()
       setApprovals(data)
       const assetMap: Record<string, Asset> = {}
-      await Promise.all(data.filter(a => a.asset_id).map(async a => {
-        const ar = await fetch(`${API}/assets/${a.asset_id}`)
-        if (ar.ok) assetMap[a.asset_id!] = await ar.json()
+      const planMap: Record<string, WeeklyPlan> = {}
+      await Promise.all(data.map(async a => {
+        if (a.asset_id) {
+          const ar = await fetch(`${API}/assets/${a.asset_id}`)
+          if (ar.ok) assetMap[a.asset_id] = await ar.json()
+        }
+        if (a.weekly_plan_id) {
+          const pr = await fetch(`${API}/plans/${a.weekly_plan_id}`)
+          if (pr.ok) planMap[a.weekly_plan_id] = await pr.json()
+        }
       }))
       setAssets(assetMap)
+      setPlans(planMap)
       await fetchProjects()
     } catch { setError('Could not connect to backend.') }
     finally { setLoading(false) }
@@ -319,7 +356,7 @@ export default function InboxPage() {
                 <AnimatedContent key={approval.id} delay={i * 60}>
                   <SwipeActions
                     onSwipeRight={() => approve(approval.id)}
-                    onSwipeLeft={() => setSelected({ approval, asset })}
+                    onSwipeLeft={() => setSelected({ approval, asset, plan: approval.weekly_plan_id ? plans[approval.weekly_plan_id] ?? null : null })}
                   >
                     <div className="rounded-[20px] p-[2px]" style={{ background: `linear-gradient(135deg, ${accent}, rgba(10,10,10,0.2) 65%, transparent)` }}>
                       <Card className="bg-[#111827]">
@@ -339,10 +376,16 @@ export default function InboxPage() {
                             </div>
                             {asset?.copy_en && <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2 mb-1">{asset.copy_en}</p>}
                             {asset?.copy_ar && <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.35)] line-clamp-1" dir="rtl">{asset.copy_ar}</p>}
+                            {!asset && approval.weekly_plan_id && plans[approval.weekly_plan_id] && (
+                              <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2">{plans[approval.weekly_plan_id].objective}</p>
+                            )}
+                            {!asset && approval.weekly_plan_id && !plans[approval.weekly_plan_id] && (
+                              <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">Weekly marketing plan — tap View to see details</p>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-[rgba(201,168,76,0.08)] sm:flex-row">
-                          <button onClick={() => setSelected({ approval, asset })}
+                          <button onClick={() => setSelected({ approval, asset, plan: approval.weekly_plan_id ? plans[approval.weekly_plan_id] ?? null : null })}
                             className="w-full sm:w-auto sm:min-w-[88px] flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px] hover:text-[#F8F6F1] transition-all">
                             <Eye size={13} /> View
                           </button>
@@ -350,7 +393,7 @@ export default function InboxPage() {
                             className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
                             <ThumbsUp size={14} /> Approve
                           </button>
-                          <button onClick={() => setSelected({ approval, asset })}
+                          <button onClick={() => setSelected({ approval, asset, plan: approval.weekly_plan_id ? plans[approval.weekly_plan_id] ?? null : null })}
                             className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
                             <ThumbsDown size={14} /> Reject
                           </button>
