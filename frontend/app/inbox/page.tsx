@@ -11,6 +11,12 @@ const FILTERS = ['All', 'Therapia', 'Qawwi', 'ProductBench', 'SahmAlgo']
 const CHANNEL_LABELS: Record<string, string> = {
   instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X / Twitter', google_ads: 'Google Ads'
 }
+const CHANNEL_ACCENTS: Record<string, string> = {
+  instagram: 'rgba(225,48,108,0.18)',
+  linkedin: 'rgba(0,119,181,0.18)',
+  x: 'rgba(29,161,242,0.18)',
+  google_ads: 'rgba(66,133,244,0.18)',
+}
 const API = '/api/proxy'
 
 interface Approval { id: string; asset_id: string | null; weekly_plan_id: string | null; decision: string | null; created_at: string }
@@ -23,6 +29,10 @@ const PROJECT_FILTERS: Record<string, string> = {
   Qawwi: 'qawwi',
   ProductBench: 'productbench',
   SahmAlgo: 'sahmalgo',
+}
+
+function channelAccent(channel: string | null | undefined) {
+  return CHANNEL_ACCENTS[channel || ''] || 'rgba(201,168,76,0.14)'
 }
 
 function proxyImg(url: string | null) {
@@ -59,7 +69,9 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[20px] p-[2px] bg-gradient-to-br from-[rgba(201,168,76,0.15)] to-transparent border border-[rgba(201,168,76,0.15)]">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[20px] p-[2px] border border-[rgba(255,255,255,0.06)]" style={{
+        background: `linear-gradient(135deg, ${channelAccent(asset?.channel)}, rgba(10,10,10,0.2) 55%, transparent)`,
+      }}>
         <div className="rounded-[18px] bg-[#1E293B]">
           <div className="flex items-center justify-between p-5 border-b border-[rgba(255,255,255,0.06)]">
             <div className="flex items-center gap-2 flex-wrap">
@@ -109,26 +121,26 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }
             </div>
           )}
 
-          <div className="flex gap-3 p-5 pt-3">
+          <div className="flex flex-col gap-2 p-5 pt-3 sm:flex-row">
             {!showReject ? (
               <>
                 <button onClick={async () => { setSubmitting(true); await onApprove(); setSubmitting(false); onClose() }} disabled={deciding || submitting}
-                  className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-3 min-h-[48px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
+                  className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-base font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
                   <ThumbsUp size={15} /> Approve
                 </button>
                 <button onClick={() => setShowReject(true)}
-                  className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[48px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
+                  className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-base font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
                   <ThumbsDown size={15} /> Reject
                 </button>
               </>
             ) : (
               <>
                 <button onClick={() => setShowReject(false)}
-                  className="flex-1 font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 min-h-[48px]">
+                  className="w-full sm:flex-1 font-['IBM_Plex_Sans'] text-base text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 min-h-[56px]">
                   Back
                 </button>
                 <button onClick={async () => { setSubmitting(true); await onReject(rejectReason || ''); setSubmitting(false); onClose() }} disabled={submitting}
-                  className="flex-1 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[48px] disabled:opacity-40 hover:bg-[rgba(239,68,68,0.2)] transition-all">
+                  className="w-full sm:flex-1 font-['IBM_Plex_Sans'] text-base font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[56px] disabled:opacity-40 hover:bg-[rgba(239,68,68,0.2)] transition-all">
                   {submitting ? 'Saving...' : rejectReason ? 'Reject & Save Feedback' : 'Reject'}
                 </button>
               </>
@@ -322,42 +334,45 @@ export default function InboxPage() {
           <div className="space-y-3 pb-4">
             {pending.map((approval, i) => {
               const asset = approval.asset_id ? assets[approval.asset_id] : null
+              const accent = channelAccent(asset?.channel)
               return (
                 <AnimatedContent key={approval.id} delay={i * 60}>
                   <SwipeActions
                     onSwipeRight={() => approve(approval.id)}
                     onSwipeLeft={() => setSelected({ approval, asset })}
                   >
-                    <Card>
-                      <div className="flex gap-3">
-                        <Thumb url={asset?.design_thumbnail_url ?? null} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">
-                              {asset ? CHANNEL_LABELS[asset.channel] || asset.channel : 'Plan'}
-                            </span>
-                            {asset?.type && <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 rounded-full border border-[rgba(255,255,255,0.06)]">{asset.type}</span>}
-                            {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
+                    <div className="rounded-[20px] p-[2px]" style={{ background: `linear-gradient(135deg, ${accent}, rgba(10,10,10,0.2) 65%, transparent)` }}>
+                      <Card className="bg-[#111827]">
+                        <div className="flex gap-3">
+                          <Thumb url={asset?.design_thumbnail_url ?? null} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                              <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">
+                                {asset ? CHANNEL_LABELS[asset.channel] || asset.channel : 'Plan'}
+                              </span>
+                              {asset?.type && <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 rounded-full border border-[rgba(255,255,255,0.06)]">{asset.type}</span>}
+                              {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
+                            </div>
+                            {asset?.copy_en && <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2 mb-1">{asset.copy_en}</p>}
+                            {asset?.copy_ar && <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.35)] line-clamp-1" dir="rtl">{asset.copy_ar}</p>}
                           </div>
-                          {asset?.copy_en && <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2 mb-1">{asset.copy_en}</p>}
-                          {asset?.copy_ar && <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.35)] line-clamp-1" dir="rtl">{asset.copy_ar}</p>}
                         </div>
-                      </div>
-                      <div className="flex gap-2 mt-4 pt-4 border-t border-[rgba(201,168,76,0.08)]">
-                        <button onClick={() => setSelected({ approval, asset })}
-                          className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px] hover:text-[#F8F6F1] transition-all">
-                          <Eye size={13} /> View
-                        </button>
-                        <button onClick={() => approve(approval.id)} disabled={deciding === approval.id}
-                          className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-2.5 min-h-[44px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
-                          <ThumbsUp size={14} /> Approve
-                        </button>
-                        <button onClick={() => setSelected({ approval, asset })}
-                          className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-2.5 min-h-[44px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
-                          <ThumbsDown size={14} /> Reject
-                        </button>
-                      </div>
-                    </Card>
+                        <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-[rgba(201,168,76,0.08)] sm:flex-row">
+                          <button onClick={() => setSelected({ approval, asset })}
+                            className="w-full sm:w-auto sm:min-w-[88px] flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px] hover:text-[#F8F6F1] transition-all">
+                            <Eye size={13} /> View
+                          </button>
+                          <button onClick={() => approve(approval.id)} disabled={deciding === approval.id}
+                            className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
+                            <ThumbsUp size={14} /> Approve
+                          </button>
+                          <button onClick={() => setSelected({ approval, asset })}
+                            className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
+                            <ThumbsDown size={14} /> Reject
+                          </button>
+                        </div>
+                      </Card>
+                    </div>
                   </SwipeActions>
                 </AnimatedContent>
               )
