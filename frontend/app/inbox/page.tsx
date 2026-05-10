@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { SwipeActions } from '@/components/inbox/SwipeActions'
 import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, ImageOff, Eye } from 'lucide-react'
 
 const FILTERS = ['All', 'Therapia', 'Qawwi', 'ProductBench', 'SahmAlgo']
@@ -319,36 +320,41 @@ export default function InboxPage() {
               const asset = approval.asset_id ? assets[approval.asset_id] : null
               return (
                 <AnimatedContent key={approval.id} delay={i * 60}>
-                  <Card>
-                    <div className="flex gap-3">
-                      <Thumb url={asset?.design_thumbnail_url ?? null} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">
-                            {asset ? CHANNEL_LABELS[asset.channel] || asset.channel : 'Plan'}
-                          </span>
-                          {asset?.type && <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 rounded-full border border-[rgba(255,255,255,0.06)]">{asset.type}</span>}
-                          {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
+                  <SwipeActions
+                    onSwipeRight={() => approve(approval.id)}
+                    onSwipeLeft={() => setSelected({ approval, asset })}
+                  >
+                    <Card>
+                      <div className="flex gap-3">
+                        <Thumb url={asset?.design_thumbnail_url ?? null} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">
+                              {asset ? CHANNEL_LABELS[asset.channel] || asset.channel : 'Plan'}
+                            </span>
+                            {asset?.type && <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 rounded-full border border-[rgba(255,255,255,0.06)]">{asset.type}</span>}
+                            {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
+                          </div>
+                          {asset?.copy_en && <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2 mb-1">{asset.copy_en}</p>}
+                          {asset?.copy_ar && <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.35)] line-clamp-1" dir="rtl">{asset.copy_ar}</p>}
                         </div>
-                        {asset?.copy_en && <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2 mb-1">{asset.copy_en}</p>}
-                        {asset?.copy_ar && <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.35)] line-clamp-1" dir="rtl">{asset.copy_ar}</p>}
                       </div>
-                    </div>
-                    <div className="flex gap-2 mt-4 pt-4 border-t border-[rgba(201,168,76,0.08)]">
-                      <button onClick={() => setSelected({ approval, asset })}
-                        className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px] hover:text-[#F8F6F1] transition-all">
-                        <Eye size={13} /> View
-                      </button>
-                      <button onClick={() => approve(approval.id)} disabled={deciding === approval.id}
-                        className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-2.5 min-h-[44px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
-                        <ThumbsUp size={14} /> Approve
-                      </button>
-                      <button onClick={() => setSelected({ approval, asset })}
-                        className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-2.5 min-h-[44px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
-                        <ThumbsDown size={14} /> Reject
-                      </button>
-                    </div>
-                  </Card>
+                      <div className="flex gap-2 mt-4 pt-4 border-t border-[rgba(201,168,76,0.08)]">
+                        <button onClick={() => setSelected({ approval, asset })}
+                          className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px] hover:text-[#F8F6F1] transition-all">
+                          <Eye size={13} /> View
+                        </button>
+                        <button onClick={() => approve(approval.id)} disabled={deciding === approval.id}
+                          className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-2.5 min-h-[44px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
+                          <ThumbsUp size={14} /> Approve
+                        </button>
+                        <button onClick={() => setSelected({ approval, asset })}
+                          className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-2.5 min-h-[44px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
+                          <ThumbsDown size={14} /> Reject
+                        </button>
+                      </div>
+                    </Card>
+                  </SwipeActions>
                 </AnimatedContent>
               )
             })}
