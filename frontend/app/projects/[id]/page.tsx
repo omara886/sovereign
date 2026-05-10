@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import { Upload, Image, Type, Palette, FileText, Check, Loader2, Brain, Zap, Play } from 'lucide-react'
+import { Upload, Image, Type, Palette, FileText, Check, Loader2, Brain, Zap, Play, Sparkles } from 'lucide-react'
 
 const API = '/api/proxy'
 
@@ -31,6 +31,8 @@ export default function ProjectPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysisDone, setAnalysisDone] = useState(false)
   const [jobStatus, setJobStatus] = useState<Record<string, unknown> | null>(null)
   const [running, setRunning] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -67,7 +69,9 @@ export default function ProjectPage() {
       }
       setUploadDone(true)
       await load()
-      setTimeout(() => setUploadDone(false), 3000)
+      setTimeout(() => setUploadDone(false), 4000)
+      // analysis runs in background on server — reload memory after 8s to show updates
+      setTimeout(async () => { await load() }, 8000)
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
@@ -192,8 +196,30 @@ export default function ProjectPage() {
 
             {uploads.length === 0 && !uploading && (
               <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.2)] text-center py-4">
-                No assets yet. Upload your logo first — the AI uses it in every generated design.
+                No assets yet. Upload your logo first — the AI uses it in every design.
               </p>
+            )}
+
+            {/* Re-analyze button */}
+            {uploads.length > 0 && (
+              <AnimatedContent delay={300}>
+                <button
+                  onClick={async () => {
+                    setAnalyzing(true); setAnalysisDone(false)
+                    await fetch(`${API}/uploads/${slug}/analyze-now`, { method: 'POST' })
+                    setTimeout(async () => { await load(); setAnalyzing(false); setAnalysisDone(true) }, 10000)
+                    setTimeout(() => setAnalysisDone(false), 15000)
+                  }}
+                  disabled={analyzing}
+                  className="w-full flex items-center justify-center gap-2 mt-4 font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-dashed border-[rgba(201,168,76,0.3)] rounded-xl py-3 hover:bg-[rgba(201,168,76,0.05)] transition-all disabled:opacity-40 min-h-[48px]"
+                >
+                  {analyzing ? <Loader2 size={15} className="animate-spin" /> :
+                   analysisDone ? <Check size={15} /> : <Sparkles size={15} />}
+                  {analyzing ? 'AI is reading your assets...' :
+                   analysisDone ? 'Memory updated from assets' :
+                   'Re-analyze assets & update brand guide'}
+                </button>
+              </AnimatedContent>
             )}
           </div>
         )}
