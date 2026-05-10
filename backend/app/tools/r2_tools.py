@@ -42,10 +42,11 @@ async def upload_to_r2(file_bytes: bytes, filename: str, content_type: str = "ap
         )
         return f"{public_base.rstrip('/')}/{filename}"
 
-    # Local fallback for development
-    _LOCAL_FALLBACK.mkdir(parents=True, exist_ok=True)
-    ((_LOCAL_FALLBACK) / filename).write_bytes(file_bytes)
-    return f"file://{_LOCAL_FALLBACK}/{filename}"
+    # Local fallback — create subdirs since filename includes slashes e.g. therapia/logo/uuid.png
+    target = _LOCAL_FALLBACK / filename
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(file_bytes)
+    return f"file://{target}"
 
 
 def get_signed_url(filename: str, expiry_seconds: int = 3600) -> str:
