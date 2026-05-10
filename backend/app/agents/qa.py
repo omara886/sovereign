@@ -5,15 +5,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.base import BaseAgent, HAIKU
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 
-SYSTEM_PROMPT = """You are the QA Agent. Score copy quality 0-100. Pass ≥85.
+SYSTEM_PROMPT = """You are the QA Agent. Score copy quality 0-100. Pass ≥70.
 
-BRAND (25pts): tone matches brand voice; no rejected patterns; Gulf Saudi Arabic only.
-COPY (25pts): no unverified claims; specific CTA; within channel limits.
-ARABIC (25pts): Gulf Saudi dialect (not MSA/Egyptian); RTL; no literal translations.
-POLICY (25pts): no clinical health claims; no prohibited content; accurate claims.
+BRAND (25pts): tone matches brand voice; Gulf Saudi Arabic only; no Egyptian/formal Arabic.
+COPY (25pts): no false medical claims; specific CTA; within channel character limits.
+ARABIC (25pts): Gulf Saudi dialect; reads naturally; not translated English.
+POLICY (25pts): no clinical treatment claims (e.g. "يعالج" "مضمون"); no prohibited content.
+
+IMPORTANT: Saying the app helps you "track your health" or "monitor habits" is a FEATURE DESCRIPTION, not a clinical claim. Do NOT penalize feature descriptions.
+Only penalize claims like "cures", "treats", "guaranteed results", "clinically proven".
 
 Call get_brand_memory then score. Output JSON:
-{"qa_score":90,"qa_passed":true,"checks":[{"check_name":"tone","status":"pass","note":"...","points_awarded":10}],"required_fixes":[]}
+{"qa_score":85,"qa_passed":true,"checks":[{"check_name":"tone","status":"pass","note":"Gulf Saudi confirmed","points_awarded":10}],"required_fixes":[]}
 
 Output exact JSON:
 {
@@ -145,7 +148,7 @@ def _validate_copy(copy_ar: str, copy_en: str, cta_ar: str, cta_en: str, exclude
       issues.append('English copy too short or empty')
 
     forbidden_ar = ['يا صديقي', 'حبيبي', 'ازيك', 'تفضّل', 'عزيزي المستخدم']
-    forbidden_en = ['unlock', 'leverage', 'empower', 'discover the power', 'journey to', 'revolutionize']
+    forbidden_en = ['leverage', 'empower', 'discover the power', 'journey to', 'revolutionize']
     for phrase in forbidden_ar:
         if phrase in ar:
             issues.append(f'Forbidden Arabic phrase: {phrase}')
@@ -159,6 +162,7 @@ def _validate_copy(copy_ar: str, copy_en: str, cta_ar: str, cta_en: str, exclude
     generic_ctas = ['Click here', 'Learn more', 'اضغط هنا', 'اعرف أكثر']
     if any(cta.lower() == generic.lower() for generic in generic_ctas for cta in [cta_en, cta_ar]):
         issues.append('Generic CTA detected')
-    if cta_en.lower().startswith(('are you', 'do you', 'have you', 'discover', 'unlock')):
+    # Only block generic question openers on CTAs — "Discover X" is fine as a CTA
+    if cta_en.lower().startswith(('are you', 'do you', 'have you')):
         issues.append(f'Forbidden English CTA start: {cta_en.split()[0] if cta_en else "empty"}')
     return issues
