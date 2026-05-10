@@ -63,7 +63,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
-      <Aurora className="pt-14 pb-10 px-4 md:px-8">
+      <Aurora className="pt-[calc(3.5rem+env(safe-area-inset-top))] pb-10 px-4 md:px-8">
         <div className="max-w-5xl mx-auto">
           <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)] mb-2">Sovereign</p>
           <h1 className="font-['Cormorant_Garamond'] text-4xl md:text-6xl text-[#F8F6F1] mb-2">
@@ -119,11 +119,11 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-              {jobResult?.status === 'done' && jobResult.assets_passed_qa !== undefined && jobResult.assets_passed_qa > 0 && (
+              {jobResult?.status === 'done' && (
                 <Link href="/inbox"
                   className="shrink-0 font-['IBM_Plex_Sans'] text-sm bg-[#C9A84C] text-[#0A0A0A] px-4 py-2 rounded-xl font-bold min-h-[44px] flex items-center"
                 >
-                  Review in Inbox →
+                  Go to Inbox →
                 </Link>
               )}
             </div>
