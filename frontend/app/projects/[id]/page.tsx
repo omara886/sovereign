@@ -93,6 +93,8 @@ export default function ProjectPage() {
   const [currentPlan, setCurrentPlan] = useState<WeeklyPlan | null>(null)
   const [planLoading, setPlanLoading] = useState(false)
   const [planError, setPlanError] = useState('')
+  const [approvalBusy, setApprovalBusy] = useState(false)
+  const [approvalMessage, setApprovalMessage] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -179,6 +181,33 @@ export default function ProjectPage() {
         }
       }, 2000)
     } catch { setRunning(false) }
+  }
+
+  const handleApprovePlan = async () => {
+    if (!currentPlan || approvalBusy || running) return
+    setApprovalBusy(true)
+    setApprovalMessage('')
+    try {
+      const approvalRes = await fetch(`${API}/approvals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weekly_plan_id: currentPlan.id }),
+      })
+      const text = await approvalRes.text()
+      if (!approvalRes.ok) {
+        let detail = text
+        try { detail = JSON.parse(text).detail || text } catch { /* use raw */ }
+        throw new Error(`${approvalRes.status}: ${detail}`)
+      }
+      const approval = JSON.parse(text) as { id: string }
+      setCurrentPlan({ ...currentPlan, status: 'approved' })
+      setApprovalMessage(`Approval submitted (${approval.id.slice(0, 8)}). Generating copy and designs...`)
+      await runPipeline('run')
+    } catch (err: unknown) {
+      setApprovalMessage(err instanceof Error ? err.message : 'Could not approve plan')
+    } finally {
+      setApprovalBusy(false)
+    }
   }
 
   const active = FILE_TYPES.find(f => f.key === activeType)!
@@ -384,7 +413,22 @@ export default function ProjectPage() {
                 }`}>
                   {running && <Loader2 size={16} className="text-[#C9A84C] animate-spin shrink-0" />}
                   {jobStatus.status === 'done' && <Check size={16} className="text-[#10B981] shrink-0" />}
-                  <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1]">{String(jobStatus.step)}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1]">{String(jobStatus.step)}</p>
+                    {jobStatus.status === 'done' && typeof jobStatus.assets_passed_qa === 'number' && (
+                      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-1">
+                        {jobStatus.assets_passed_qa} assets ready for review
+                      </p>
+                    )}
+                  </div>
+                  {jobStatus.status === 'done' && typeof jobStatus.assets_passed_qa === 'number' && jobStatus.assets_passed_qa > 0 && (
+                    <a
+                      href="/inbox"
+                      className="shrink-0 font-['IBM_Plex_Sans'] text-xs bg-[#C9A84C] text-[#0A0A0A] px-3 py-2 rounded-xl font-bold min-h-[40px] flex items-center"
+                    >
+                      Go to Inbox →
+                    </a>
+                  )}
                 </div>
               )}
 
@@ -411,14 +455,21 @@ export default function ProjectPage() {
                     Generate Weekly Plan
                   </button>
                   <button
-                    disabled
-                    className="w-full flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] rounded-xl py-3 min-h-[48px] transition-all opacity-70 cursor-not-allowed"
+                    onClick={() => void handleApprovePlan()}
+                    disabled={!currentPlan || approvalBusy || running}
+                    className="w-full flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] hover:bg-[#E8C97A] rounded-xl py-3 min-h-[48px] transition-all disabled:opacity-40"
                   >
-                    Approve Plan
+                    {(approvalBusy || running) ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                    {approvalBusy ? 'Submitting approval...' : running ? 'Generating copy and designs...' : 'Approve Plan'}
                   </button>
                 </div>
 
                 <div className="mt-5">
+                  {approvalMessage && (
+                    <div className="rounded-xl border border-[rgba(201,168,76,0.18)] bg-[rgba(201,168,76,0.06)] px-4 py-3 mb-3">
+                      <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1]">{approvalMessage}</p>
+                    </div>
+                  )}
                   {planLoading && (
                     <div className="flex items-center gap-2 text-sm text-[rgba(248,246,241,0.45)] font-['IBM_Plex_Sans']">
                       <Loader2 size={15} className="animate-spin text-[#C9A84C]" />
