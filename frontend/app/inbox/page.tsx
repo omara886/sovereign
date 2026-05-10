@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { FetchError } from '@/components/ui/FetchError'
 import { ProjectImage } from '@/components/ui/ProjectImage'
-import { SwipeActions } from '@/components/inbox/SwipeActions'
 import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, Eye } from 'lucide-react'
 
 const FILTERS = ['All', 'Therapia', 'Qawwi', 'ProductBench', 'SahmAlgo']
@@ -393,55 +392,62 @@ export default function InboxPage() {
                 : asset?.channel === 'google_ads'
                 ? 'rgba(66,133,244,0.18)'
                 : 'rgba(201,168,76,0.14)'
+              const openDetail = () => setSelected({ approval, asset, plan: approval.weekly_plan_id ? plans[approval.weekly_plan_id] ?? null : null })
               return (
                 <AnimatedContent key={approval.id} delay={i * 60}>
-                  <SwipeActions
-                    onSwipeRight={() => approve(approval.id)}
-                    onSwipeLeft={() => setSelected({ approval, asset, plan: approval.weekly_plan_id ? plans[approval.weekly_plan_id] ?? null : null })}
-                  >
-                    <div className="rounded-[20px] p-[2px]" style={{ background: `linear-gradient(135deg, ${accent}, rgba(10,10,10,0.2) 65%, transparent)` }}>
-                      <Card className="bg-[#111827]">
-                        <div className="flex gap-3">
+                  <div className="rounded-[20px] p-[2px]" style={{ background: `linear-gradient(135deg, ${accent}, rgba(10,10,10,0.2) 65%, transparent)` }}>
+                    <div className="rounded-[18px] bg-[#111827] p-4">
+                      {/* Thumbnail + content row */}
+                      <div className="flex gap-3 mb-4">
+                        <button onClick={openDetail} className="shrink-0">
                           <ProjectImage
                             url={asset?.design_thumbnail_url ?? null}
                             alt=""
-                            className="w-20 h-20 rounded-xl shrink-0 overflow-hidden border border-[rgba(201,168,76,0.1)]"
+                            className="w-20 h-20 rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)]"
                           />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">
-                                {asset ? CHANNEL_LABELS[asset.channel] || asset.channel : 'Plan'}
-                              </span>
-                              {asset?.type && <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 rounded-full border border-[rgba(255,255,255,0.06)]">{asset.type}</span>}
-                              {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
-                            </div>
-                            {asset?.copy_en && <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2 mb-1">{asset.copy_en}</p>}
-                            {asset?.copy_ar && <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.35)] line-clamp-1" dir="rtl">{asset.copy_ar}</p>}
-                            {!asset && approval.weekly_plan_id && plans[approval.weekly_plan_id] && (
-                              <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2">{plans[approval.weekly_plan_id].objective}</p>
-                            )}
-                            {!asset && approval.weekly_plan_id && !plans[approval.weekly_plan_id] && (
-                              <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">Weekly marketing plan — tap View to see details</p>
-                            )}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">
+                              {asset ? CHANNEL_LABELS[asset.channel] || asset.channel : 'Plan'}
+                            </span>
+                            {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
                           </div>
+                          {asset?.copy_en && <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2 mb-1">{asset.copy_en}</p>}
+                          {asset?.copy_ar && <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.35)] line-clamp-1" dir="rtl">{asset.copy_ar}</p>}
+                          {!asset && approval.weekly_plan_id && plans[approval.weekly_plan_id] && (
+                            <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2">{plans[approval.weekly_plan_id].objective}</p>
+                          )}
+                          {!asset && approval.weekly_plan_id && !plans[approval.weekly_plan_id] && (
+                            <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">Weekly plan — tap View to see details</p>
+                          )}
                         </div>
-                        <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-[rgba(201,168,76,0.08)] sm:flex-row">
-                          <button onClick={() => setSelected({ approval, asset, plan: approval.weekly_plan_id ? plans[approval.weekly_plan_id] ?? null : null })}
-                            className="w-full sm:w-auto sm:min-w-[88px] flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px] hover:text-[#F8F6F1] transition-all">
-                            <Eye size={13} /> View
-                          </button>
-                          <button onClick={() => approve(approval.id)} disabled={deciding === approval.id}
-                            className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
-                            <ThumbsUp size={14} /> Approve
-                          </button>
-                          <button onClick={() => setSelected({ approval, asset, plan: approval.weekly_plan_id ? plans[approval.weekly_plan_id] ?? null : null })}
-                            className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
-                            <ThumbsDown size={14} /> Reject
-                          </button>
-                        </div>
-                      </Card>
+                      </div>
+                      {/* Action buttons — full width, large touch targets */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          onClick={openDetail}
+                          className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.6)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 min-h-[52px] active:bg-[rgba(255,255,255,0.05)] transition-colors"
+                        >
+                          <Eye size={14} /> View
+                        </button>
+                        <button
+                          onClick={() => approve(approval.id)}
+                          disabled={deciding === approval.id}
+                          className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-sm font-bold text-[#10B981] bg-[rgba(16,185,129,0.12)] border border-[rgba(16,185,129,0.3)] rounded-xl py-3 min-h-[52px] active:bg-[rgba(16,185,129,0.25)] transition-colors disabled:opacity-40"
+                        >
+                          <ThumbsUp size={15} /> Approve
+                        </button>
+                        <button
+                          onClick={openDetail}
+                          disabled={deciding === approval.id}
+                          className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-sm font-bold text-[#EF4444] bg-[rgba(239,68,68,0.12)] border border-[rgba(239,68,68,0.3)] rounded-xl py-3 min-h-[52px] active:bg-[rgba(239,68,68,0.25)] transition-colors disabled:opacity-40"
+                        >
+                          <ThumbsDown size={15} /> Reject
+                        </button>
+                      </div>
                     </div>
-                  </SwipeActions>
+                  </div>
                 </AnimatedContent>
               )
             })}
