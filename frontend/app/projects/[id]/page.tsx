@@ -8,6 +8,33 @@ import { Upload, Image, Type, Palette, FileText, Check, Loader2, Brain, Zap, Pla
 
 const API = '/api/proxy'
 
+type PlanTactic = {
+  id?: string
+  channel?: string
+  asset_type?: string
+  funnel_stage?: string
+  rationale?: string
+  rationale_simple?: string
+  budget_estimate_sar?: number | string
+  budget_type?: string
+  stop_loss_sar?: number | string | null
+  expected_metric?: string
+  expected_value?: string
+}
+
+type WeeklyPlan = {
+  id: string
+  week_start: string
+  objective: string
+  funnel_focus: string
+  tactics: PlanTactic[]
+  total_budget_estimate: number | string
+  rationale: string
+  risk_flags: string[]
+  status: string
+  approval_id?: string | null
+}
+
 function proxyImg(url: string | null) {
   if (!url) return null
   if (url.startsWith("data:")) return url // base64 data URL — render directly
@@ -63,6 +90,9 @@ export default function ProjectPage() {
   const [analysisDone, setAnalysisDone] = useState(false)
   const [jobStatus, setJobStatus] = useState<Record<string, unknown> | null>(null)
   const [running, setRunning] = useState(false)
+  const [currentPlan, setCurrentPlan] = useState<WeeklyPlan | null>(null)
+  const [planLoading, setPlanLoading] = useState(false)
+  const [planError, setPlanError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -79,6 +109,33 @@ export default function ProjectPage() {
   }, [slug])
 
   useEffect(() => { load() }, [load])
+
+  const loadCurrentPlan = useCallback(async () => {
+    setPlanLoading(true)
+    setPlanError('')
+    try {
+      const res = await fetch(`${API}/plans/current/${slug}`)
+      if (res.status === 404) {
+        setCurrentPlan(null)
+        return
+      }
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      setCurrentPlan(await res.json())
+    } catch (err: unknown) {
+      setPlanError(err instanceof Error ? err.message : 'Could not load current plan')
+      setCurrentPlan(null)
+    } finally {
+      setPlanLoading(false)
+    }
+  }, [slug])
+
+  useEffect(() => {
+    if (tab === 'Pipeline') {
+      void loadCurrentPlan()
+    }
+  }, [tab, loadCurrentPlan])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -332,16 +389,144 @@ export default function ProjectPage() {
               )}
 
               <Card>
-                <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1] mb-1">Weekly Plan</h2>
-                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-4">
-                  Strategy Agent analyzes your memory + assets and creates this week&apos;s marketing plan.
-                </p>
-                <button onClick={() => runPipeline('plan')} disabled={running}
-                  className="w-full flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.08)] hover:bg-[rgba(201,168,76,0.15)] rounded-xl py-3 min-h-[48px] transition-all disabled:opacity-40"
-                >
-                  {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-                  Generate Weekly Plan
-                </button>
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <div>
+                    <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">Weekly Plan</h2>
+                    <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-1">
+                      Strategy Agent analyzes your memory + assets and creates this week&apos;s marketing plan.
+                    </p>
+                  </div>
+                  {currentPlan && (
+                    <Badge variant={currentPlan.status === 'approved' ? 'success' : 'gold'}>
+                      {currentPlan.status.replace(/_/g, ' ')}
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 mt-4">
+                  <button onClick={() => runPipeline('plan')} disabled={running}
+                    className="w-full flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.08)] hover:bg-[rgba(201,168,76,0.15)] rounded-xl py-3 min-h-[48px] transition-all disabled:opacity-40"
+                  >
+                    {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                    Generate Weekly Plan
+                  </button>
+                  <button
+                    disabled
+                    className="w-full flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] rounded-xl py-3 min-h-[48px] transition-all opacity-70 cursor-not-allowed"
+                  >
+                    Approve Plan
+                  </button>
+                </div>
+
+                <div className="mt-5">
+                  {planLoading && (
+                    <div className="flex items-center gap-2 text-sm text-[rgba(248,246,241,0.45)] font-['IBM_Plex_Sans']">
+                      <Loader2 size={15} className="animate-spin text-[#C9A84C]" />
+                      Loading current weekly plan...
+                    </div>
+                  )}
+                  {planError && (
+                    <p className="font-['IBM_Plex_Sans'] text-sm text-[#EF4444]">{planError}</p>
+                  )}
+                  {!planLoading && !planError && !currentPlan && (
+                    <div className="rounded-xl border border-dashed border-[rgba(201,168,76,0.18)] bg-[rgba(201,168,76,0.04)] px-4 py-4">
+                      <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">No weekly plan yet</p>
+                      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-1">
+                        Generate one to see the objective, tactics, and budget inline here.
+                      </p>
+                    </div>
+                  )}
+                  {currentPlan && (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-[rgba(201,168,76,0.15)] bg-[rgba(255,255,255,0.02)] p-4">
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          <Badge variant="gold">{currentPlan.funnel_focus}</Badge>
+                          <Badge variant="channel">{currentPlan.week_start}</Badge>
+                          <Badge variant="default">{currentPlan.tactics.length} tactics</Badge>
+                        </div>
+                        <p className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1] leading-tight">
+                          {currentPlan.objective}
+                        </p>
+                        <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.65)] mt-3 leading-relaxed">
+                          {currentPlan.rationale}
+                        </p>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                          <div className="rounded-xl bg-[rgba(255,255,255,0.03)] p-3">
+                            <p className="font-['IBM_Plex_Sans'] text-[11px] uppercase tracking-[0.18em] text-[rgba(248,246,241,0.35)]">Budget</p>
+                            <p className="font-['IBM_Plex_Mono'] text-sm text-[#C9A84C] mt-1">
+                              SAR {Number(currentPlan.total_budget_estimate || 0).toLocaleString('en-US')}
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-[rgba(255,255,255,0.03)] p-3">
+                            <p className="font-['IBM_Plex_Sans'] text-[11px] uppercase tracking-[0.18em] text-[rgba(248,246,241,0.35)]">Status</p>
+                            <p className="font-['IBM_Plex_Mono'] text-sm text-[#F8F6F1] mt-1">{currentPlan.status}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {currentPlan.tactics.map((tactic, index) => (
+                          <div key={tactic.id ?? `${tactic.channel}-${index}`} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] p-4">
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              <Badge variant="channel">{tactic.channel || 'channel'}</Badge>
+                              <Badge variant="default">{tactic.asset_type || 'asset'}</Badge>
+                              {tactic.funnel_stage && <Badge variant="gold">{tactic.funnel_stage}</Badge>}
+                              {tactic.budget_type && <Badge variant={tactic.budget_type === 'paid' ? 'warning' : 'success'}>{tactic.budget_type}</Badge>}
+                            </div>
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">
+                                  {tactic.rationale_simple || tactic.rationale || 'Tactic details'}
+                                </p>
+                                {tactic.rationale && tactic.rationale_simple && tactic.rationale !== tactic.rationale_simple && (
+                                  <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] mt-2 leading-relaxed">
+                                    {tactic.rationale}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.45)]">Budget</p>
+                                <p className="font-['IBM_Plex_Mono'] text-sm text-[#C9A84C]">
+                                  SAR {Number(tactic.budget_estimate_sar || 0).toLocaleString('en-US')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {tactic.expected_metric && (
+                                <div className="rounded-lg bg-[rgba(255,255,255,0.03)] px-3 py-2">
+                                  <p className="font-['IBM_Plex_Sans'] text-[11px] uppercase tracking-[0.16em] text-[rgba(248,246,241,0.35)]">Expected metric</p>
+                                  <p className="font-['IBM_Plex_Sans'] text-xs text-[#F8F6F1] mt-1">{tactic.expected_metric}</p>
+                                </div>
+                              )}
+                              {tactic.expected_value && (
+                                <div className="rounded-lg bg-[rgba(255,255,255,0.03)] px-3 py-2">
+                                  <p className="font-['IBM_Plex_Sans'] text-[11px] uppercase tracking-[0.16em] text-[rgba(248,246,241,0.35)]">Expected value</p>
+                                  <p className="font-['IBM_Plex_Sans'] text-xs text-[#F8F6F1] mt-1">{tactic.expected_value}</p>
+                                </div>
+                              )}
+                            </div>
+                            {tactic.stop_loss_sar !== null && tactic.stop_loss_sar !== undefined && (
+                              <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-3">
+                                Stop loss: SAR {Number(tactic.stop_loss_sar).toLocaleString('en-US')}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {currentPlan.risk_flags?.length > 0 && (
+                        <div className="rounded-xl border border-[rgba(245,158,11,0.18)] bg-[rgba(245,158,11,0.06)] p-4">
+                          <p className="font-['IBM_Plex_Sans'] text-sm font-medium text-[#F8F6F1] mb-2">Risk flags</p>
+                          <div className="flex flex-wrap gap-2">
+                            {currentPlan.risk_flags.map((flag, index) => (
+                              <Badge key={`${flag}-${index}`} variant="warning">{flag}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </Card>
             </AnimatedContent>
 
