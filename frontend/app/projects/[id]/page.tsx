@@ -59,8 +59,12 @@ export default function ProjectPage() {
       form.append('file', file)
       form.append('file_type', activeType)
       const res = await fetch(`${API}/uploads/${slug}`, { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'Upload failed')
+      const text = await res.text()
+      if (!res.ok) {
+        let detail = text
+        try { detail = JSON.parse(text).detail || text } catch { /* use raw */ }
+        throw new Error(`${res.status}: ${detail}`)
+      }
       setUploadDone(true)
       await load()
       setTimeout(() => setUploadDone(false), 3000)
