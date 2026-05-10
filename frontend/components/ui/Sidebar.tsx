@@ -1,11 +1,20 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BarChart3, FolderKanban, Inbox, LayoutDashboard, LogOut, Settings } from 'lucide-react'
+import { BarChart3, CalendarDays, FolderKanban, Inbox, LayoutDashboard, LogOut, Settings } from 'lucide-react'
+
+function getCurrentWeekMondayHref() {
+  const now = new Date()
+  const day = now.getDay() || 7
+  now.setDate(now.getDate() - day + 1)
+  now.setHours(0, 0, 0, 0)
+  return `/plans/${now.toISOString().slice(0, 10)}`
+}
 
 const NAV_ITEMS = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/projects', icon: FolderKanban, label: 'Projects' },
+  { href: getCurrentWeekMondayHref(), icon: CalendarDays, label: 'Plans' },
   { href: '/inbox', icon: Inbox, label: 'Inbox' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/settings', icon: Settings, label: 'Settings' },
