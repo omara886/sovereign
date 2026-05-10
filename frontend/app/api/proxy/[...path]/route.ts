@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const BACKEND = process.env.BACKEND_URL || 'https://sovereign-backend.railway.app'
+const BACKEND = process.env.BACKEND_URL || 'https://backend-production-37a17.up.railway.app'
 
 async function handler(req: NextRequest, { params }: { params: { path: string[] } }) {
   const path = params.path.join('/')

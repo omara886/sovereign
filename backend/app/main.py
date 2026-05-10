@@ -31,6 +31,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://frontend-production-9eea5.up.railway.app",
+        "https://backend-production-37a17.up.railway.app",
         "http://localhost:3000",
         settings.NEXT_PUBLIC_API_URL,
     ],

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
 export async function GET() {
-  return new NextResponse(process.env.BACKEND_URL || 'NOT SET — using default')
+  const url = process.env.BACKEND_URL || 'https://backend-production-37a17.up.railway.app (hardcoded default)'
+  return new NextResponse(url)
 }
