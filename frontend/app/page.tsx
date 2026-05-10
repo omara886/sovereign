@@ -26,12 +26,19 @@ type ProjectSummary = {
   name: string
   primary_goal: string
   status: string
-  pendingApprovals: number
-  hasPlan: boolean
-  planStatus: string | null
-  hasLogo: boolean
-  nextAction: string
-  publishedAssets: number
+}
+type ProjectStatus = {
+  project_id: string
+  slug: string
+  name: string
+  has_logo: boolean
+  has_memory?: boolean
+  has_plan: boolean
+  plan_status: string | null
+  plan_id: string | null
+  pending_approvals: number
+  published_assets: number
+  next_action: string
 }
 type WeeklySummaryItem = {
   name: string
@@ -111,6 +118,7 @@ export default function DashboardPage() {
   const [metricsLoading, setMetricsLoading] = useState(true)
   const [metricsError, setMetricsError] = useState('')
   const [projects, setProjects] = useState<ProjectSummary[]>([])
+  const [projectStatuses, setProjectStatuses] = useState<Record<string, ProjectStatus>>({})
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [weeklySummary, setWeeklySummary] = useState<WeeklySummaryItem[]>([])
   const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(true)
@@ -154,20 +162,17 @@ export default function DashboardPage() {
       const res = await fetch(`${API}/projects`)
       if (!res.ok) return
       const data: Array<{ id: string; slug: string; name: string; primary_goal: string; status: string }> = await res.json()
-      const enriched = await Promise.all(data.map(async project => {
+      setProjects(data)
+      const statuses = await Promise.all(data.map(async project => {
         const statusRes = await fetch(`${API}/projects/${project.slug}/status`)
         const statusData = statusRes.ok ? await statusRes.json() : null
-        return {
-          ...project,
-          pendingApprovals: Number(statusData?.pending_approvals ?? 0),
-          hasPlan: Boolean(statusData?.has_plan),
-          planStatus: statusData?.plan_status ?? null,
-          hasLogo: Boolean(statusData?.has_logo),
-          nextAction: statusData?.next_action ?? 'complete',
-          publishedAssets: Number(statusData?.published_assets ?? 0),
-        }
+        return [project.slug, statusData] as const
       }))
-      setProjects(enriched)
+      setProjectStatuses(statuses.reduce<Record<string, ProjectStatus>>((acc, [slug, statusData]) => {
+        if (!statusData) return acc
+        acc[slug] = statusData
+        return acc
+      }, {}))
     } catch {
       // keep the previous project snapshot on transient failures
     } finally {
@@ -349,46 +354,47 @@ export default function DashboardPage() {
               </AnimatedContent>
             )) : projects.map((project, i) => {
               const projectIsRunning = activeJob?.project === project.slug && isRunning
+              const status = projectStatuses[project.slug]
               const statusBadge = projectIsRunning ? (
                 <Badge variant="gold" className="gap-1">
                   <Loader2 size={10} className="animate-spin" />
                   Running
                 </Badge>
-              ) : project.pendingApprovals > 0 ? (
-                <Badge variant="gold">{project.pendingApprovals} pending</Badge>
-              ) : !project.hasLogo ? (
+              ) : (status?.pending_approvals ?? 0) > 0 ? (
+                <Badge variant="gold">{status?.pending_approvals} pending</Badge>
+              ) : !status?.has_logo ? (
                 <Badge variant="default">Needs logo</Badge>
-              ) : !project.hasPlan ? (
+              ) : !status?.has_plan ? (
                 <Badge variant="default">Not started</Badge>
-              ) : project.planStatus === 'approved' || project.planStatus === 'executing' ? (
+              ) : status?.plan_status === 'approved' || status?.plan_status === 'executing' ? (
                 <Badge variant="success">Ready</Badge>
               ) : (
-                <Badge variant="default">{project.planStatus || project.status}</Badge>
+                <Badge variant="default">{status?.plan_status || project.status}</Badge>
               )
               const cardTone = projectIsRunning
                 ? 'border-[rgba(201,168,76,0.22)] bg-[linear-gradient(180deg,rgba(201,168,76,0.08),rgba(255,255,255,0.02))]'
-                : project.pendingApprovals > 0
+                : (status?.pending_approvals ?? 0) > 0
                 ? 'border-[rgba(201,168,76,0.18)] bg-[linear-gradient(180deg,rgba(201,168,76,0.06),rgba(255,255,255,0.02))]'
-                : !project.hasPlan
+                : !status?.has_plan
                 ? 'border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)]'
                 : 'border-[rgba(16,185,129,0.14)] bg-[linear-gradient(180deg,rgba(16,185,129,0.05),rgba(255,255,255,0.02))]'
               const helperText = projectIsRunning
                 ? 'Pipeline is running now'
-                : project.pendingApprovals > 0
+                : (status?.pending_approvals ?? 0) > 0
                 ? 'Needs review in Inbox'
-                : !project.hasLogo
+                : !status?.has_logo
                 ? 'Upload logo first'
-                : !project.hasPlan
+                : !status?.has_plan
                 ? 'Upload assets to begin'
                 : 'Plan ready and waiting'
               const nextAction = {
                 upload_logo: { label: 'Upload Logo →', href: `/projects/${project.slug}`, primary: false },
                 generate_plan: { label: 'Generate Plan →', href: `/projects/${project.slug}?tab=Pipeline`, primary: false },
                 approve_plan: { label: 'Approve Plan →', href: `/projects/${project.slug}?tab=Pipeline`, primary: true },
-                review_inbox: { label: `Review Inbox (${project.pendingApprovals})`, href: '/inbox', primary: true },
+                review_inbox: { label: `Review Inbox (${status?.pending_approvals ?? 0})`, href: '/inbox', primary: true },
                 running: { label: 'Generating...', href: `/projects/${project.slug}`, primary: false },
                 complete: { label: 'View Project →', href: `/projects/${project.slug}`, primary: false },
-              }[project.nextAction] || { label: 'View Project →', href: `/projects/${project.slug}`, primary: false }
+              }[status?.next_action ?? 'complete'] || { label: 'View Project →', href: `/projects/${project.slug}`, primary: false }
 
               return (
                 <AnimatedContent key={project.slug} delay={250 + i * 60}>
