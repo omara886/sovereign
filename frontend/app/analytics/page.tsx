@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import CountUp from '@/components/react-bits/CountUp'
 import { Card } from '@/components/ui/Card'
@@ -60,6 +61,22 @@ export default function AnalyticsPage() {
             </div>
           </Card>
         </AnimatedContent>
+
+        {!loading && (summary?.total_assets_generated ?? 0) === 0 && (
+          <AnimatedContent delay={180}>
+            <Card className="mt-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-[rgba(201,168,76,0.12)] border border-[rgba(201,168,76,0.2)] flex items-center justify-center text-[#C9A84C] font-bold">→</div>
+                <div>
+                  <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-semibold mb-1">After you approve and publish content, metrics appear here automatically.</p>
+                  <Link href="/inbox" className="inline-flex items-center font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] rounded-xl px-4 py-2 min-h-[44px] hover:bg-[rgba(201,168,76,0.08)] transition-all">
+                    Go to Inbox →
+                  </Link>
+                </div>
+              </div>
+            </Card>
+          </AnimatedContent>
+        )}
       </div>
     </div>
   )

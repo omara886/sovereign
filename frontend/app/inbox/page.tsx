@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -309,6 +310,9 @@ export default function InboxPage() {
                 <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)] text-center max-w-xs">
                   No pending approvals. Run the pipeline on a project to generate content.
                 </p>
+                <Link href="/projects/therapia" className="mt-3 inline-flex items-center font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] rounded-xl px-4 py-2 min-h-[44px] hover:bg-[rgba(201,168,76,0.08)] transition-all">
+                  Run pipeline on Therapia →
+                </Link>
               </div>
             </Card>
           </AnimatedContent>

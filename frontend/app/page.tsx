@@ -346,6 +346,25 @@ export default function DashboardPage() {
             </Card>
           </AnimatedContent>
         )}
+
+        {!weeklySummaryLoading && weeklySummary.length === 0 && (
+          <AnimatedContent delay={600}>
+            <Card className="mt-6">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1]">This Week&apos;s Insights</h2>
+                  <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-1">
+                    After you approve and publish content, metrics and learnings appear here automatically.
+                  </p>
+                </div>
+                <Badge variant="default">Waiting</Badge>
+              </div>
+              <Link href="/inbox" className="inline-flex items-center font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] rounded-xl px-4 py-2 min-h-[44px] hover:bg-[rgba(201,168,76,0.08)] transition-all">
+                Go to Inbox →
+              </Link>
+            </Card>
+          </AnimatedContent>
+        )}
       </div>
     </div>
   )
