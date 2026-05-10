@@ -29,6 +29,7 @@ export default function InboxPage() {
       const res = await fetch(`${API}/api/approvals?status=pending`)
       if (!res.ok) throw new Error('API error')
       const data: Approval[] = await res.json()
+      console.log('inbox approvals', data.map(a => ({ id: a.id, decision: a.decision, status: (a as Approval & { status?: string }).status })))
       setApprovals(data)
       const assetMap: Record<string, Asset> = {}
       await Promise.all(
@@ -55,18 +56,19 @@ export default function InboxPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),
       })
+      setApprovals(current => current.filter(a => a.id !== approvalId))
       await fetchApprovals()
     } finally {
       setDeciding(null)
     }
   }
 
-  const pending = approvals.filter(a => !a.decision)
+  const pending = approvals.filter(a => a.decision == null)
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
       {/* Header */}
-      <div className="pt-12 pb-6 px-4 md:px-8 border-b border-[rgba(201,168,76,0.1)]">
+      <div className="pt-[calc(3rem+env(safe-area-inset-top))] pb-6 px-4 md:px-8 border-b border-[rgba(201,168,76,0.1)]">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Inbox size={22} className="text-[#C9A84C]" />
