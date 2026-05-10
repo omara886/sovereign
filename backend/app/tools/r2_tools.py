@@ -61,8 +61,9 @@ async def upload_to_r2(file_bytes: bytes, filename: str, content_type: str = "ap
         )
         return f"{public_base.rstrip('/')}/{filename}"
 
-    # Strategy 2: Small image → base64 data URL (permanent, no file system)
-    if content_type in _IMAGE_TYPES and len(file_bytes) <= _MAX_BASE64_BYTES:
+    # Strategy 2: Any image → base64 data URL (permanent, survives restarts, no file system)
+    # PostgreSQL JSONB handles up to 1GB — a 5MB image as base64 is ~6.7MB, totally fine
+    if content_type in _IMAGE_TYPES:
         b64 = base64.b64encode(file_bytes).decode("utf-8")
         return f"data:{content_type};base64,{b64}"
 
