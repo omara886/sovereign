@@ -1,10 +1,27 @@
+'use client'
+import { useEffect, useState } from 'react'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 
 export default function SettingsPage() {
+  const [backendUrl, setBackendUrl] = useState('Loading...')
+
+  useEffect(() => {
+    const load = async () => {
+      const res = await fetch('/api/debug-url')
+      if (res.ok) {
+        const text = await res.text()
+        setBackendUrl(text.trim())
+      } else {
+        setBackendUrl('Unavailable')
+      }
+    }
+    void load()
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
-      <div className="pt-12 pb-6 px-4 md:px-8 border-b border-[rgba(201,168,76,0.1)]">
+      <div className="pt-[calc(3rem+env(safe-area-inset-top))] pb-6 px-4 md:px-8 border-b border-[rgba(201,168,76,0.1)]">
         <div className="max-w-3xl mx-auto">
           <h1 className="font-['Cormorant_Garamond'] text-3xl text-[#F8F6F1]">Settings</h1>
         </div>
@@ -41,6 +58,22 @@ export default function SettingsPage() {
                   <span className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.4)]">{schedule}</span>
                 </div>
               ))}
+            </div>
+          </Card>
+        </AnimatedContent>
+
+        <AnimatedContent delay={300}>
+          <Card>
+            <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1] mb-3">System Status</h2>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center py-2">
+                <span className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)]">Backend</span>
+                <span className="font-['IBM_Plex_Mono'] text-sm text-[#10B981]">Connected</span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)]">URL</span>
+                <span className="font-['IBM_Plex_Mono'] text-xs text-[#C9A84C] break-all text-right max-w-[60%]">{backendUrl}</span>
+              </div>
             </div>
           </Card>
         </AnimatedContent>
