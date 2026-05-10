@@ -1,7 +1,8 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
 import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, ImageOff, Eye } from 'lucide-react'
 
 const FILTERS = ['All', 'Therapia', 'Qawwi', 'ProductBench', 'SahmAlgo']
@@ -11,7 +12,16 @@ const CHANNEL_LABELS: Record<string, string> = {
 const API = '/api/proxy'
 
 interface Approval { id: string; asset_id: string | null; weekly_plan_id: string | null; decision: string | null; created_at: string }
-interface Asset { id: string; type: string; channel: string; language: string; copy_ar: string | null; copy_en: string | null; design_thumbnail_url: string | null; design_url: string | null; qa_score: number | null; status: string }
+interface Asset { id: string; project_id: string; type: string; channel: string; language: string; copy_ar: string | null; copy_en: string | null; design_thumbnail_url: string | null; design_url: string | null; qa_score: number | null; status: string }
+interface Project { id: string; slug: string; name: string }
+interface PublishJob { id: string; asset_id: string; approval_id: string; channel: string; scheduled_at: string; published_at: string | null; platform_post_id: string | null; status: string; error_message: string | null }
+
+const PROJECT_FILTERS: Record<string, string> = {
+  Therapia: 'therapia',
+  Qawwi: 'qawwi',
+  ProductBench: 'productbench',
+  SahmAlgo: 'sahmalgo',
+}
 
 function proxyImg(url: string | null) {
   if (!url) return null
@@ -37,22 +47,13 @@ function Thumb({ url, size = 'sm' }: { url: string | null; size?: 'sm' | 'lg' })
   )
 }
 
-function DetailModal({ approval, asset, onApprove, onClose, deciding }: {
+function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }: {
   approval: Approval; asset: Asset | null; deciding: boolean;
-  onApprove: () => void; onClose: () => void;
+  onApprove: () => Promise<void>; onReject: (reason: string) => Promise<void>; onClose: () => void;
 }) {
   const [rejectReason, setRejectReason] = useState('')
   const [showReject, setShowReject] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-
-  const reject = async () => {
-    setSubmitting(true)
-    await fetch(`${API}/approvals/${approval.id}/decide`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision: 'rejected', reason: rejectReason || null }),
-    })
-    onClose()
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -65,6 +66,7 @@ function DetailModal({ approval, asset, onApprove, onClose, deciding }: {
               </span>
               {asset?.type && <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">{asset.type}</span>}
               {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
+              <span className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.35)]">#{approval.id.slice(0, 8)}</span>
             </div>
             <button onClick={onClose} className="text-[rgba(248,246,241,0.4)] hover:text-[#F8F6F1] p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
               <X size={18} />
@@ -108,7 +110,7 @@ function DetailModal({ approval, asset, onApprove, onClose, deciding }: {
           <div className="flex gap-3 p-5 pt-3">
             {!showReject ? (
               <>
-                <button onClick={onApprove} disabled={deciding || submitting}
+                <button onClick={async () => { setSubmitting(true); await onApprove(); setSubmitting(false); onClose() }} disabled={deciding || submitting}
                   className="flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-3 min-h-[48px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
                   <ThumbsUp size={15} /> Approve
                 </button>
@@ -123,7 +125,7 @@ function DetailModal({ approval, asset, onApprove, onClose, deciding }: {
                   className="flex-1 font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 min-h-[48px]">
                   Back
                 </button>
-                <button onClick={reject} disabled={submitting}
+                <button onClick={async () => { setSubmitting(true); await onReject(rejectReason || ''); setSubmitting(false); onClose() }} disabled={submitting}
                   className="flex-1 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[48px] disabled:opacity-40 hover:bg-[rgba(239,68,68,0.2)] transition-all">
                   {submitting ? 'Saving...' : rejectReason ? 'Reject & Save Feedback' : 'Reject'}
                 </button>
@@ -140,10 +142,18 @@ export default function InboxPage() {
   const [filter, setFilter] = useState('All')
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [assets, setAssets] = useState<Record<string, Asset>>({})
+  const [projects, setProjects] = useState<Project[]>([])
+  const [publishedJobs, setPublishedJobs] = useState<PublishJob[]>([])
   const [loading, setLoading] = useState(true)
   const [deciding, setDeciding] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<{ approval: Approval; asset: Asset | null } | null>(null)
+  const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
+
+  const fetchProjects = useCallback(async () => {
+    const res = await fetch(`${API}/projects`)
+    if (res.ok) setProjects(await res.json())
+  }, [])
 
   const fetchApprovals = useCallback(async () => {
     setLoading(true); setError('')
@@ -158,23 +168,68 @@ export default function InboxPage() {
         if (ar.ok) assetMap[a.asset_id!] = await ar.json()
       }))
       setAssets(assetMap)
+      await fetchProjects()
     } catch { setError('Could not connect to backend.') }
     finally { setLoading(false) }
-  }, [])
+  }, [fetchProjects])
 
-  useEffect(() => { fetchApprovals() }, [fetchApprovals])
+  const loadPublishJobs = useCallback(async () => {
+    const slug = PROJECT_FILTERS[filter]
+    const project = projects.find(p => p.slug === slug)
+    const url = project ? `${API}/publish-jobs?project_id=${project.id}` : `${API}/publish-jobs`
+    const res = await fetch(url)
+    if (res.ok) setPublishedJobs(await res.json())
+  }, [filter, projects])
 
-  const approve = async (approvalId: string) => {
+  useEffect(() => { void fetchApprovals() }, [fetchApprovals])
+  useEffect(() => { void loadPublishJobs() }, [loadPublishJobs])
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadPublishJobs()
+    }, 30000)
+    return () => window.clearInterval(interval)
+  }, [loadPublishJobs])
+
+  useEffect(() => {
+    if (!toast) return
+    const timeout = window.setTimeout(() => setToast(null), 3000)
+    return () => window.clearTimeout(timeout)
+  }, [toast])
+
+  const decideApproval = useCallback(async (approvalId: string, decision: 'approved' | 'rejected', reason?: string | null) => {
     setDeciding(approvalId)
-    await fetch(`${API}/approvals/${approvalId}/decide`, {
+    const res = await fetch(`${API}/approvals/${approvalId}/decide`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision: 'approved' }),
+      body: JSON.stringify({ decision, reason: reason || null }),
     })
     setDeciding(null); setSelected(null)
     await fetchApprovals()
+    await loadPublishJobs()
+    return res.ok
+  }, [fetchApprovals, loadPublishJobs])
+
+  const approve = async (approvalId: string) => {
+    const ok = await decideApproval(approvalId, 'approved')
+    if (ok) setToast({ msg: '✅ Approved — scheduled for publish', color: 'success' })
+  }
+
+  const reject = async (approvalId: string, reason: string) => {
+    const ok = await decideApproval(approvalId, 'rejected', reason || null)
+    if (ok) setToast({ msg: 'Feedback saved — the AI will avoid this pattern next time', color: 'success' })
   }
 
   const pending = approvals.filter(a => a.decision == null)
+  const hasPublished = publishedJobs.length > 0
+  const activePublishedJobs = useMemo(() => {
+    if (filter === 'All') return publishedJobs
+    const slug = PROJECT_FILTERS[filter]
+    const project = projects.find(p => p.slug === slug)
+    if (!project) return publishedJobs
+    return publishedJobs.filter(job => {
+      const asset = assets[job.asset_id]
+      return asset ? asset.project_id === project.id : true
+    })
+  }, [assets, filter, projects, publishedJobs])
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
@@ -182,6 +237,7 @@ export default function InboxPage() {
         <DetailModal approval={selected.approval} asset={selected.asset}
           deciding={deciding === selected.approval.id}
           onApprove={() => approve(selected.approval.id)}
+          onReject={(reason) => reject(selected.approval.id, reason)}
           onClose={() => { setSelected(null); fetchApprovals() }} />
       )}
 
@@ -206,10 +262,18 @@ export default function InboxPage() {
           ))}
         </div>
 
+        {toast && (
+          <AnimatedContent delay={0}>
+            <Card className={`mb-4 ${toast.color === 'success' ? 'border-[rgba(16,185,129,0.25)]' : ''}`}>
+              <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1]">{toast.msg}</p>
+            </Card>
+          </AnimatedContent>
+        )}
+
         {error && <Card><p className="font-['IBM_Plex_Sans'] text-sm text-[#EF4444] text-center py-4">{error}</p></Card>}
         {loading && !error && <Card><p className="font-['IBM_Plex_Sans'] text-center text-[rgba(248,246,241,0.4)] py-12 text-sm">Loading...</p></Card>}
 
-        {!loading && !error && pending.length === 0 && (
+        {!loading && !error && pending.length === 0 && !hasPublished && (
           <AnimatedContent delay={100}>
             <Card>
               <div className="flex flex-col items-center py-16 gap-4">
@@ -265,6 +329,38 @@ export default function InboxPage() {
               )
             })}
           </div>
+        )}
+
+        {!loading && !error && activePublishedJobs.length > 0 && (
+          <AnimatedContent delay={180}>
+            <div className="mt-6 mb-4 flex items-center justify-between">
+              <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1]">Published</h2>
+              <span className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.45)]">{activePublishedJobs.length} jobs</span>
+            </div>
+            <div className="space-y-3 pb-4">
+              {activePublishedJobs.map((job, i) => (
+                <AnimatedContent key={job.id} delay={i * 50}>
+                  <Card>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">{job.channel}</p>
+                        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-1">
+                          {job.status === 'published' ? 'Published' : 'Scheduled'} • {new Date(job.scheduled_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <Badge variant={job.status === 'published' ? 'success' : 'gold'}>{job.status}</Badge>
+                    </div>
+                    {job.platform_post_id && (
+                      <p className="font-['IBM_Plex_Mono'] text-xs text-[#C9A84C] mt-3 break-all">{job.platform_post_id}</p>
+                    )}
+                    {job.error_message && (
+                      <p className="font-['IBM_Plex_Sans'] text-xs text-[#EF4444] mt-3">{job.error_message}</p>
+                    )}
+                  </Card>
+                </AnimatedContent>
+              ))}
+            </div>
+          </AnimatedContent>
         )}
       </div>
     </div>
