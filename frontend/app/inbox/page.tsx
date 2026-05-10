@@ -26,20 +26,20 @@ export default function InboxPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API}/api/approvals?status=pending`)
+      const res = await fetch(`${API}/approvals?status=pending`)
       if (!res.ok) throw new Error('API error')
       const data: Approval[] = await res.json()
       setApprovals(data)
       const assetMap: Record<string, Asset> = {}
       await Promise.all(
         data.filter(a => a.asset_id).map(async a => {
-          const ar = await fetch(`${API}/api/assets/${a.asset_id}`)
+          const ar = await fetch(`${API}/assets/${a.asset_id}`)
           if (ar.ok) assetMap[a.asset_id!] = await ar.json()
         })
       )
       setAssets(assetMap)
     } catch {
-      setError('Could not connect to backend. Make sure NEXT_PUBLIC_API_URL is set in Railway.')
+      setError('Could not connect to backend. Check Railway backend is running.')
     } finally {
       setLoading(false)
     }
@@ -50,7 +50,7 @@ export default function InboxPage() {
   const decide = async (approvalId: string, decision: 'approved' | 'rejected') => {
     setDeciding(approvalId)
     try {
-      await fetch(`${API}/api/approvals/${approvalId}/decide`, {
+      await fetch(`${API}/approvals/${approvalId}/decide`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),

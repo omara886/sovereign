@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Aurora from '@/components/react-bits/Aurora'
 import BlurText from '@/components/react-bits/BlurText'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
@@ -21,21 +21,38 @@ const API = '/api/proxy'
 
 type JobStatus = { status: string; step: string; assets_passed_qa?: number; objective?: string; email_sent?: boolean }
 
+const JOB_KEY = 'sovereign_active_job'
+
 export default function DashboardPage() {
   const [activeJob, setActiveJob] = useState<{ jobId: string; project: string; mode: string } | null>(null)
   const [jobResult, setJobResult] = useState<JobStatus | null>(null)
   const [polling, setPolling] = useState(false)
 
+  // Restore in-progress job on mount (survives page navigation)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(JOB_KEY)
+      if (saved) {
+        const job = JSON.parse(saved)
+        setActiveJob(job)
+        pollStatus(job.jobId)
+      }
+    } catch { /* ignore */ }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const triggerPipeline = async (slug: string, mode: 'plan' | 'run') => {
     setJobResult(null)
     setActiveJob({ jobId: '', project: slug, mode })
     try {
-      const res = await fetch(`${API}/api/pipeline/${mode}/${slug}`, { method: 'POST' })
+      const res = await fetch(`${API}/pipeline/${mode}/${slug}`, { method: 'POST' })
+      if (!res.ok) throw new Error(`${res.status}`)
       const data = await res.json()
-      setActiveJob({ jobId: data.job_id, project: slug, mode })
+      const job = { jobId: data.job_id, project: slug, mode }
+      setActiveJob(job)
+      localStorage.setItem(JOB_KEY, JSON.stringify(job))
       pollStatus(data.job_id)
-    } catch {
-      setJobResult({ status: 'error', step: 'Could not reach backend' })
+    } catch (e) {
+      setJobResult({ status: 'error', step: `Could not start pipeline: ${e}` })
       setActiveJob(null)
     }
   }
@@ -44,22 +61,24 @@ export default function DashboardPage() {
     setPolling(true)
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`${API}/api/pipeline/status/${jobId}`)
+        const res = await fetch(`${API}/pipeline/status/${jobId}`)
+        if (!res.ok) { clearInterval(interval); setPolling(false); return }
         const data: JobStatus = await res.json()
         setJobResult(data)
         if (data.status === 'done' || data.status === 'error') {
           clearInterval(interval)
           setPolling(false)
           setActiveJob(null)
+          localStorage.removeItem(JOB_KEY)
         }
       } catch {
         clearInterval(interval)
         setPolling(false)
       }
-    }, 2000)
+    }, 3000)
   }
 
-  const isRunning = polling || (activeJob && !jobResult)
+  const isRunning = polling || (activeJob?.jobId && !jobResult)
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">

@@ -33,9 +33,15 @@ body {
 /* Prevent horizontal scroll */
 html, body { overflow-x: hidden; }
 
-/* Mobile bottom padding so tab bar doesn't hide content */
+/* Mobile: content clears the fixed bottom tab bar + iPhone home indicator */
 @media (max-width: 767px) {
-  main { padding-bottom: 72px !important; }
+  main { padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important; }
+}
+
+/* Bottom tab bar: sit above iPhone home indicator */
+nav.mobile-tab-bar {
+  padding-bottom: env(safe-area-inset-bottom);
+  height: calc(60px + env(safe-area-inset-bottom));
 }
 
 /* Scrollbar */

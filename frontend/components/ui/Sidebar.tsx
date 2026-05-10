@@ -61,8 +61,8 @@ export default function Sidebar() {
       </aside>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 md:hidden z-50 bg-[rgba(10,10,10,0.97)] backdrop-blur-xl border-t border-[rgba(201,168,76,0.12)]">
-        <div className="flex items-center justify-around px-1 py-2">
+      <nav className="mobile-tab-bar fixed bottom-0 left-0 right-0 md:hidden z-50 bg-[rgba(10,10,10,0.97)] backdrop-blur-xl border-t border-[rgba(201,168,76,0.12)]">
+        <div className="flex items-center justify-around px-1 pt-2">
           {NAV_ITEMS.slice(0, 4).map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}
               className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl min-w-[60px] min-h-[52px] justify-center transition-colors duration-200 ${
