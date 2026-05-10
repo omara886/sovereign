@@ -249,7 +249,7 @@ export default function DashboardPage() {
         </div>
       </Aurora>
 
-      <div className="max-w-5xl mx-auto px-4 md:px-8 pb-8">
+      <div className="max-w-5xl mx-auto px-4 md:px-8 pb-[7rem]">
 
         <TodaysFocus pendingApprovals={pendingApprovals} totalGenerated={totalGenerated} loading={metricsLoading} />
 

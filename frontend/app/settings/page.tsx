@@ -26,7 +26,7 @@ export default function SettingsPage() {
           <h1 className="font-['Cormorant_Garamond'] text-3xl text-[#F8F6F1]">Settings</h1>
         </div>
       </div>
-      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-8 space-y-4">
+      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-[7rem] space-y-4">
         <AnimatedContent delay={100}>
           <Card>
             <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1] mb-3">Account</h2>
@@ -53,9 +53,9 @@ export default function SettingsPage() {
                 ['Publish Queue', 'Every 5 minutes'],
                 ['Analytics Report', 'Every Sunday 6:00 PM Riyadh'],
               ].map(([label, schedule]) => (
-                <div key={label} className="flex justify-between items-center py-2 border-b border-[rgba(255,255,255,0.04)] last:border-0">
+                <div key={label} className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center py-2 border-b border-[rgba(255,255,255,0.04)] last:border-0">
                   <span className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)]">{label}</span>
-                  <span className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.4)]">{schedule}</span>
+                  <span className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.4)] sm:text-right">{schedule}</span>
                 </div>
               ))}
             </div>

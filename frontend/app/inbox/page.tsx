@@ -252,7 +252,7 @@ export default function InboxPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-5">
+      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-5 pb-[7rem]">
         <div className="flex gap-2 overflow-x-auto pb-4 mb-5">
           {FILTERS.map(f => (
             <button key={f} onClick={() => setFilter(f)}

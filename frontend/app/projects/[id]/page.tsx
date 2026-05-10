@@ -259,7 +259,7 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-8">
+      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-[7rem]">
 
         {/* ── ASSETS TAB ── */}
         {tab === 'Assets' && (
@@ -315,7 +315,7 @@ export default function ProjectPage() {
                 <p className="font-['IBM_Plex_Sans'] text-xs font-semibold text-[rgba(248,246,241,0.4)] uppercase tracking-wider mb-3">
                   Uploaded Assets ({uploads.length})
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {uploads.map((file, i) => (
                     <Card key={i}>
                       {file.type === 'font' ? (
@@ -417,17 +417,19 @@ export default function ProjectPage() {
                     )}
                     <div>
                       <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-2">Funnel Goals</p>
-                      {Object.entries((memory.funnel_goals as Record<string, unknown>) || {}).map(([stage, data]) => {
-                        const d = data as Record<string, unknown>
-                        return (
-                          <div key={stage} className="flex justify-between items-center py-1 border-b border-[rgba(255,255,255,0.04)] last:border-0">
-                            <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] capitalize">{stage}</span>
-                            <span className="font-['IBM_Plex_Mono'] text-xs text-[#C9A84C]">
-                              {String(d.current ?? 0)} / {String(d.target ?? '?')} {String(d.metric ?? '')}
-                            </span>
-                          </div>
-                        )
-                      })}
+                      <div className="overflow-x-auto">
+                        {Object.entries((memory.funnel_goals as Record<string, unknown>) || {}).map(([stage, data]) => {
+                          const d = data as Record<string, unknown>
+                          return (
+                            <div key={stage} className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center py-1 border-b border-[rgba(255,255,255,0.04)] last:border-0">
+                              <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] capitalize">{stage}</span>
+                              <span className="font-['IBM_Plex_Mono'] text-xs text-[#C9A84C]">
+                                {String(d.current ?? 0)} / {String(d.target ?? '?')} {String(d.metric ?? '')}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   </div>
                 ) : <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.3)]">Loading...</p>}

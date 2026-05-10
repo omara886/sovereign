@@ -113,7 +113,7 @@ export default function PlanWeekPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
       <div className="pt-[calc(3rem+env(safe-area-inset-top))] pb-6 px-4 md:px-8 border-b border-[rgba(201,168,76,0.1)]">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+        <div className="max-w-5xl mx-auto flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2 text-[rgba(248,246,241,0.45)]">
               <CalendarDays size={16} className="text-[#C9A84C]" />
@@ -121,16 +121,16 @@ export default function PlanWeekPage() {
             </div>
             <h1 className="font-['Cormorant_Garamond'] text-3xl text-[#F8F6F1]">{formatLabel(weekStart)}</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-stretch gap-2 w-full sm:w-auto">
             <button
               onClick={() => router.push(`/plans/${prevWeek}`)}
-              className="flex items-center gap-2 font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.7)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px]"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.7)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px]"
             >
               <ChevronLeft size={16} /> Previous
             </button>
             <button
               onClick={() => router.push(`/plans/${nextWeek}`)}
-              className="flex items-center gap-2 font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.7)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px]"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.7)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2.5 min-h-[44px]"
             >
               Next <ChevronRight size={16} />
             </button>
@@ -138,7 +138,7 @@ export default function PlanWeekPage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 md:px-8 pt-6 pb-8 space-y-4">
+      <div className="max-w-5xl mx-auto px-4 md:px-8 pt-6 pb-[7rem] space-y-4">
         {loading ? (
           <Card>
             <div className="flex items-center gap-2 text-[rgba(248,246,241,0.45)] font-['IBM_Plex_Sans'] text-sm py-6">

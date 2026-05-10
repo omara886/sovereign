@@ -38,7 +38,7 @@ export default function AnalyticsPage() {
           </p>
         </div>
       </div>
-      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-8">
+      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-[7rem]">
         <AnimatedContent delay={100}>
           <Card>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
