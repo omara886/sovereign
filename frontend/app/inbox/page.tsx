@@ -57,13 +57,12 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }
 
           {(asset?.design_url || asset?.design_thumbnail_url) && (
             <div className="px-5 pt-5">
-              <ProjectImage
-                url={asset.design_url || asset.design_thumbnail_url}
-                alt=""
-                className="w-full aspect-video rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)]"
-                fallbackSize={32}
-              />
-            </div>
+            <ProjectImage
+              url={asset.design_url || asset.design_thumbnail_url}
+              alt=""
+              className="w-full aspect-video rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)]"
+            />
+          </div>
           )}
 
           <div className="p-5 space-y-4">

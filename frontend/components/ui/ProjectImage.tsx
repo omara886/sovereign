@@ -7,25 +7,27 @@ interface ProjectImageProps {
   url: string | null | undefined
   alt?: string
   className?: string
-  fallbackSize?: number
 }
 
-function resolveUrl(url: string): string {
+function fix(url: string | null): string | null {
+  if (!url) return null
   if (url.startsWith('data:')) return url
-  if (url.startsWith('file://') || url.includes('railway.app') || url.includes('localhost')) {
+  if (url.includes('sovereign-backend.railway.app')) url = url.replace('sovereign-backend', 'backend-production-37a17')
+  if (url.startsWith('file://')) return null
+  if (url.includes('railway.app') || url.includes('localhost')) {
     return `/api/img?url=${encodeURIComponent(url)}`
   }
   return url
 }
 
-export function ProjectImage({ url, alt = '', className = '', fallbackSize = 20 }: ProjectImageProps) {
+export function ProjectImage({ url, alt = '', className = '' }: ProjectImageProps) {
   const [broken, setBroken] = useState(false)
-  const src = url ? resolveUrl(url) : null
+  const src = fix(url ?? null)
 
   if (!src || broken) {
     return (
-      <div className={`flex items-center justify-center bg-[#0A0A0A] border border-[rgba(255,255,255,0.06)] ${className}`}>
-        <ImageOff size={fallbackSize} className="text-[rgba(248,246,241,0.1)]" />
+      <div className={`flex items-center justify-center bg-[#0A0A0A] ${className}`}>
+        <ImageOff size={18} className="text-[rgba(248,246,241,0.1)]" />
       </div>
     )
   }
