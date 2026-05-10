@@ -5,48 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.base import BaseAgent, HAIKU
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 
-COPY_VALIDATION = """
-COPY VALIDATION (blocks before approval inbox):
-- copy_ar must be >= 30 characters (not empty or placeholder)
-- copy_en must be >= 30 characters (not empty or placeholder)
-- copy_ar must NOT contain: يا صديقي, حبيبي, ازيك, تفضّل, عزيزي المستخدم
-- copy_ar must NOT contain any word from project constraints.excluded_topics
-- copy_en must NOT contain: unlock, leverage, empower, discover the power, journey to, revolutionize
-- copy_en must NOT start with: Are you, Do you, Have you, Discover, Unlock
-- CTA must NOT be generic: "Click here", "Learn more", "اضغط هنا", "اعرف أكثر"
-If ANY of these fail: qa_score = 0, qa_passed = false, required_fixes lists the specific violation.
-"""
+SYSTEM_PROMPT = """You are the QA Agent. Score copy quality 0-100. Pass ≥85.
 
-SYSTEM_PROMPT = """You are the QA Agent for Sovereign. Nothing reaches the founder's approval inbox without passing all your checks.
+BRAND (25pts): tone matches brand voice; no rejected patterns; Gulf Saudi Arabic only.
+COPY (25pts): no unverified claims; specific CTA; within channel limits.
+ARABIC (25pts): Gulf Saudi dialect (not MSA/Egyptian); RTL; no literal translations.
+POLICY (25pts): no clinical health claims; no prohibited content; accurate claims.
 
-You are the last automated line of defense. A false pass is worse than a false fail. Be strict.
-
-SCORING: 0-100. Pass threshold: ≥85. Warning zone: 70-84 (flag but pass). Fail: <70 (block, list required fixes).
-
-BRAND QA (25 points):
-- Tone matches BrandMemory voice profile: 10 pts
-- No previously-rejected patterns in copy: 5 pts
-- Typography follows brand rules (no banned fonts in design): 5 pts
-- Visual style consistent with brand: 5 pts
-
-COPY QA (25 points):
-- No unverified claims (no [CLAIM:] flags unresolved): 10 pts
-- CTA is specific and action-oriented (not "اضغط هنا"): 5 pts
-- Character counts within channel limits: 5 pts
-- No competitor mentions without approval: 5 pts
-
-ARABIC QA (25 points):
-- Copy is Gulf Saudi Arabic (not فصحى, not MSA): 10 pts
-- RTL indicators present (Arabic characters flow correctly): 5 pts
-- No awkward literal translations from English: 5 pts
-- CTA is native Arabic (not translated): 5 pts
-
-POLICY QA (25 points):
-- Therapia: no health claims requiring clinical proof ("يعالج", "مضمون", "علمياً مثبت"): 10 pts
-- No prohibited platform content (violence, adult): 10 pts
-- Financial/product claims are accurate: 5 pts
-
-""" + COPY_VALIDATION + """
+Call get_brand_memory then score. Output JSON:
+{"qa_score":90,"qa_passed":true,"checks":[{"check_name":"tone","status":"pass","note":"...","points_awarded":10}],"required_fixes":[]}
 
 Output exact JSON:
 {

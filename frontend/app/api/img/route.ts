@@ -20,8 +20,11 @@ export async function GET(req: NextRequest) {
     return new NextResponse('file not accessible', { status: 404 })
   }
 
+  // Rewrite old/wrong backend URL to the correct one
+  const resolvedUrl = url.replace('sovereign-backend.railway.app', 'backend-production-37a17.up.railway.app')
+
   try {
-    const res = await fetch(url)
+    const res = await fetch(resolvedUrl)
     if (!res.ok) return new NextResponse('not found', { status: 404 })
     const blob = await res.arrayBuffer()
     const contentType = res.headers.get('content-type') || 'image/png'

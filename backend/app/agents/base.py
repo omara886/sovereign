@@ -4,11 +4,15 @@ Base agent with:
 - Prompt caching: system prompt cached on every call (saves ~90% on repeated runs)
 - Tool-use loop: runs until end_turn or 12 iterations
 """
+import asyncio
 import json
+import logging
 
 import anthropic
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 # Model constants — change here to update everywhere
 SONNET = "claude-sonnet-4-20250514"   # Strategy, Brand, Copy, Analytics
@@ -39,14 +43,7 @@ class BaseAgent:
         ]
 
         for _ in range(12):
-            response = await self.client.messages.create(
-                model=self.MODEL,
-                max_tokens=self.max_tokens,
-                system=system_with_cache,
-                tools=self.tools if self.tools else [],
-                messages=messages,
-                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-            )
+            response = await self._create_with_retry(system_with_cache, messages)
 
             if response.stop_reason == "end_turn":
                 for block in reversed(response.content):
@@ -75,3 +72,27 @@ class BaseAgent:
                 messages.append({"role": "user", "content": tool_results})
 
         raise RuntimeError("agent loop limit reached after 12 iterations")
+
+    async def _create_with_retry(self, system: list, messages: list, max_retries: int = 4) -> anthropic.types.Message:
+        """Retry on rate limit errors with exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                return await self.client.messages.create(
+                    model=self.MODEL,
+                    max_tokens=self.max_tokens,
+                    system=system,
+                    tools=self.tools if self.tools else [],
+                    messages=messages,
+                    extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+                )
+            except anthropic.RateLimitError as e:
+                if attempt == max_retries - 1:
+                    raise
+                wait = 20 * (2 ** attempt)  # 20s, 40s, 80s, 160s
+                logger.warning("Rate limit hit (attempt %d/%d) — waiting %ds: %s", attempt + 1, max_retries, wait, str(e)[:80])
+                await asyncio.sleep(wait)
+            except anthropic.APIStatusError as e:
+                if e.status_code == 529 and attempt < max_retries - 1:  # overloaded
+                    await asyncio.sleep(10 * (attempt + 1))
+                    continue
+                raise
