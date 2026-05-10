@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Loader2, CalendarDays } from 'lucide-react'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { FetchError } from '@/components/ui/FetchError'
 
 const API = '/api/proxy'
 
@@ -78,16 +79,22 @@ export default function PlanWeekPage() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [projects, setProjects] = useState<ProjectRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
       const [plansRes, projectsRes] = await Promise.all([
         fetch(`${API}/plans?week_start=${weekIso}`),
         fetch(`${API}/projects`),
       ])
       if (plansRes.ok) setPlans(await plansRes.json())
+      else throw new Error(`Plans HTTP ${plansRes.status}`)
       if (projectsRes.ok) setProjects(await projectsRes.json())
+      else throw new Error(`Projects HTTP ${projectsRes.status}`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not load weekly plans')
     } finally {
       setLoading(false)
     }
@@ -139,7 +146,9 @@ export default function PlanWeekPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 pt-6 pb-[7rem] space-y-4">
-        {loading ? (
+        {error ? (
+          <FetchError message={error} onRetry={load} />
+        ) : loading ? (
           <Card>
             <div className="flex items-center gap-2 text-[rgba(248,246,241,0.45)] font-['IBM_Plex_Sans'] text-sm py-6">
               <Loader2 size={16} className="animate-spin text-[#C9A84C]" />

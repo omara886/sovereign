@@ -4,6 +4,7 @@ import Link from 'next/link'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import CountUp from '@/components/react-bits/CountUp'
 import { Card } from '@/components/ui/Card'
+import { FetchError } from '@/components/ui/FetchError'
 import { BarChart3, Loader2 } from 'lucide-react'
 
 type MetricsSummary = {
@@ -15,12 +16,17 @@ type MetricsSummary = {
 export default function AnalyticsPage() {
   const [summary, setSummary] = useState<MetricsSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const load = async () => {
+      setError('')
       try {
         const res = await fetch('/api/proxy/metrics/summary')
         if (res.ok) setSummary(await res.json())
+        else throw new Error(`HTTP ${res.status}`)
+      } catch {
+        setError('Could not load analytics summary')
       } finally {
         setLoading(false)
       }
@@ -39,6 +45,22 @@ export default function AnalyticsPage() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-[7rem]">
+        {error ? (
+          <AnimatedContent delay={100}>
+            <FetchError message={error} onRetry={() => { setLoading(true); void (async () => {
+              try {
+                const res = await fetch('/api/proxy/metrics/summary')
+                if (res.ok) setSummary(await res.json())
+                else throw new Error(`HTTP ${res.status}`)
+                setError('')
+              } catch {
+                setError('Could not load analytics summary')
+              } finally {
+                setLoading(false)
+              }
+            })() }} />
+          </AnimatedContent>
+        ) : (
         <AnimatedContent delay={100}>
           <Card>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -61,6 +83,7 @@ export default function AnalyticsPage() {
             </div>
           </Card>
         </AnimatedContent>
+        )}
 
         {!loading && (summary?.total_assets_generated ?? 0) === 0 && (
           <AnimatedContent delay={180}>

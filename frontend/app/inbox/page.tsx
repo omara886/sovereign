@@ -4,6 +4,7 @@ import Link from 'next/link'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { FetchError } from '@/components/ui/FetchError'
 import { ProjectImage } from '@/components/ui/ProjectImage'
 import { SwipeActions } from '@/components/inbox/SwipeActions'
 import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, Eye } from 'lucide-react'
@@ -280,7 +281,7 @@ export default function InboxPage() {
           </AnimatedContent>
         )}
 
-        {error && <Card><p className="font-['IBM_Plex_Sans'] text-sm text-[#EF4444] text-center py-4">{error}</p></Card>}
+        {error && <FetchError message={error} onRetry={fetchApprovals} />}
         {loading && !error && <Card><p className="font-['IBM_Plex_Sans'] text-center text-[rgba(248,246,241,0.4)] py-12 text-sm">Loading...</p></Card>}
 
         {!loading && !error && pending.length === 0 && !hasPublished && (

@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { FetchError } from '@/components/ui/FetchError'
 import { ProjectImage } from '@/components/ui/ProjectImage'
 import { Upload, Image, Type, Palette, FileText, Check, Loader2, Brain, Zap, Play, Sparkles } from 'lucide-react'
 
@@ -304,7 +305,9 @@ export default function ProjectPage() {
                   </div>
                 </label>
                 {uploadError && (
-                  <p className="font-['IBM_Plex_Sans'] text-sm text-[#EF4444] text-center pb-4">{uploadError}</p>
+                  <div className="pb-4">
+                    <FetchError message={uploadError} onRetry={load} />
+                  </div>
                 )}
               </Card>
             </AnimatedContent>
@@ -513,9 +516,7 @@ export default function ProjectPage() {
                       Loading current weekly plan...
                     </div>
                   )}
-                  {planError && (
-                    <p className="font-['IBM_Plex_Sans'] text-sm text-[#EF4444]">{planError}</p>
-                  )}
+                  {planError && <FetchError message={planError} onRetry={loadCurrentPlan} />}
                   {!planLoading && !planError && !currentPlan && (
                     <div className="rounded-xl border border-dashed border-[rgba(201,168,76,0.18)] bg-[rgba(201,168,76,0.04)] px-4 py-4">
                       <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">No weekly plan yet</p>
@@ -666,9 +667,7 @@ export default function ProjectPage() {
                   </div>
                 )}
 
-                {analyticsError && (
-                  <p className="font-['IBM_Plex_Sans'] text-sm text-[#EF4444]">{analyticsError}</p>
-                )}
+                {analyticsError && <FetchError message={analyticsError} onRetry={loadAnalytics} />}
 
                 {!analyticsLoading && !analyticsError && analyticsAssets.length === 0 && (
                   <div className="rounded-xl border border-dashed border-[rgba(201,168,76,0.18)] bg-[rgba(201,168,76,0.04)] px-4 py-4">

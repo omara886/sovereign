@@ -7,6 +7,7 @@ import CountUp from '@/components/react-bits/CountUp'
 import SpotlightCard from '@/components/react-bits/SpotlightCard'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { FetchError } from '@/components/ui/FetchError'
 import { ProjectImage } from '@/components/ui/ProjectImage'
 import Link from 'next/link'
 import { CheckCircle, Clock, LayoutDashboard, Loader2, Play, TrendingUp, Zap } from 'lucide-react'
@@ -111,33 +112,41 @@ export default function DashboardPage() {
   const [polling, setPolling] = useState(false)
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
+  const [metricsError, setMetricsError] = useState('')
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [weeklySummary, setWeeklySummary] = useState<WeeklySummaryItem[]>([])
   const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(true)
+  const [weeklySummaryError, setWeeklySummaryError] = useState('')
 
   const loadMetrics = useCallback(async () => {
+    setMetricsError('')
     try {
       const res = await fetch(`${API}/metrics/summary`)
       if (res.ok) {
         setMetrics(await res.json())
+      } else {
+        throw new Error(`HTTP ${res.status}`)
       }
     } catch {
-      // keep prior data on transient failures
+      setMetricsError('Could not load dashboard metrics')
     } finally {
       setMetricsLoading(false)
     }
   }, [])
 
   const loadWeeklySummary = useCallback(async () => {
+    setWeeklySummaryError('')
     try {
       const res = await fetch(`${API}/metrics/weekly-summary`)
       if (res.ok) {
         const data = await res.json()
         setWeeklySummary(data.projects || [])
+      } else {
+        throw new Error(`HTTP ${res.status}`)
       }
     } catch {
-      // ignore transient errors
+      setWeeklySummaryError('Could not load weekly insights')
     } finally {
       setWeeklySummaryLoading(false)
     }
@@ -250,6 +259,11 @@ export default function DashboardPage() {
       </Aurora>
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 pb-[7rem]">
+        {metricsError ? (
+          <AnimatedContent delay={80}>
+            <FetchError message={metricsError} onRetry={loadMetrics} />
+          </AnimatedContent>
+        ) : null}
 
         <TodaysFocus pendingApprovals={pendingApprovals} totalGenerated={totalGenerated} loading={metricsLoading} />
 
@@ -417,7 +431,7 @@ export default function DashboardPage() {
           </div>
         </AnimatedContent>
 
-        {!weeklySummaryLoading && weeklySummary.length > 0 && (
+        {!weeklySummaryLoading && !weeklySummaryError && weeklySummary.length > 0 && (
           <AnimatedContent delay={600}>
             <Card className="mt-6">
               <div className="flex items-start justify-between gap-3 mb-4">
@@ -468,7 +482,7 @@ export default function DashboardPage() {
           </AnimatedContent>
         )}
 
-        {!weeklySummaryLoading && weeklySummary.length === 0 && (
+        {!weeklySummaryLoading && !weeklySummaryError && weeklySummary.length === 0 && (
           <AnimatedContent delay={600}>
             <Card className="mt-6">
               <div className="flex items-start justify-between gap-3 mb-4">
@@ -484,6 +498,14 @@ export default function DashboardPage() {
                 Go to Inbox →
               </Link>
             </Card>
+          </AnimatedContent>
+        )}
+
+        {weeklySummaryError && (
+          <AnimatedContent delay={600}>
+            <div className="mt-6">
+              <FetchError message={weeklySummaryError} onRetry={loadWeeklySummary} />
+            </div>
           </AnimatedContent>
         )}
       </div>
