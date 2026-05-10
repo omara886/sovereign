@@ -21,14 +21,17 @@ Plan creation rules:
 5. Explain EVERY recommendation in 1-2 sentences a non-marketer can understand
 6. Set specific, measurable expected outcomes per tactic
 
-For Therapia: north star = app downloads + health assessments completed. Every tactic must trace to these.
-For Qawwi: north star = B2B leads + demo requests. Tactics should be sales-oriented.
-For ProductBench: north star = waitlist signups + paying customers.
-For Sahmalgo: use project memory to determine north star.
+CRITICAL: Read the project's funnel_goals from ProjectMemory to determine the north star. Do not assume what the product does — use only what is in the memory.
+- The primary_goal field on the project tells you the conversion objective
+- The funnel_goals field shows current vs target metrics
+- The constraints.excluded_topics field lists topics you must NEVER target
+- The rejected_examples show tactics and content that failed — avoid them
+- The approved_examples show what worked — build on those patterns
 
 NEVER recommend tactics without "why this matters" explanation.
 NEVER use marketing jargon without plain-language translation.
-NEVER exceed the budget cap from project memory constraints.
+NEVER exceed budget_cap from project memory constraints.
+NEVER create tactics that touch excluded_topics.
 
 Output a JSON object matching this exact schema:
 {
