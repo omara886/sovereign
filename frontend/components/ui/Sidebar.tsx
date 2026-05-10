@@ -97,15 +97,15 @@ export default function Sidebar() {
 
       {/* Mobile bottom tab bar */}
       <nav className="mobile-tab-bar fixed bottom-0 left-0 right-0 md:hidden z-50 bg-[rgba(10,10,10,0.97)] backdrop-blur-xl border-t border-[rgba(201,168,76,0.12)]">
-        <div className="flex items-center justify-around px-1 pt-2">
-          {NAV_ITEMS.slice(0, 4).map(({ href, icon: Icon, label }) => (
+        <div className="flex items-center px-1 pt-2">
+          {NAV_ITEMS.slice(0, 5).map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}
-              className={`relative flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl min-w-[60px] min-h-[52px] justify-center transition-colors duration-200 ${
+              className={`relative flex flex-col items-center gap-0.5 px-2 py-2 rounded-lg flex-1 min-h-[52px] justify-center transition-colors duration-200 ${
                 isActive(href) ? 'text-[#C9A84C]' : 'text-[rgba(248,246,241,0.35)]'
               }`}
             >
-              <Icon size={22} />
-              <span className="font-['IBM_Plex_Sans'] text-[10px] leading-tight">{label}</span>
+              <Icon size={20} />
+              <span className="font-['IBM_Plex_Sans'] text-[9px] leading-tight text-center">{label}</span>
               {label === 'Inbox' && inboxCount > 0 && (
                 <span className="absolute top-1 right-2 min-w-4 h-4 px-1 rounded-full bg-[#EF4444] text-white text-[9px] font-bold flex items-center justify-center">
                   {inboxCount}
