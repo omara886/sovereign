@@ -113,6 +113,13 @@ export default function ProjectPage() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsError, setAnalyticsError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const hasPlan = Boolean(currentPlan)
+  const hasApprovedAssets = Boolean(
+    (jobStatus?.status === 'done' && Number(jobStatus?.assets_passed_qa || 0) > 0) ||
+    currentPlan?.status === 'approved' ||
+    currentPlan?.status === 'executing' ||
+    currentPlan?.status === 'done'
+  )
 
   const load = useCallback(async () => {
     try {
@@ -170,6 +177,10 @@ export default function ProjectPage() {
       void loadCurrentPlan()
     }
   }, [tab, loadCurrentPlan])
+
+  useEffect(() => {
+    void loadCurrentPlan()
+  }, [loadCurrentPlan])
 
   useEffect(() => {
     if (tab === 'Analytics') {
@@ -269,6 +280,9 @@ export default function ProjectPage() {
               >{t}</button>
             ))}
           </div>
+          {(uploads.length === 0 || !currentPlan) && (
+            <SetupProgress uploads={uploads.length} hasPlan={hasPlan} hasApprovedAssets={hasApprovedAssets} />
+          )}
         </div>
       </div>
 
@@ -625,7 +639,8 @@ export default function ProjectPage() {
                 <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-4">
                   Plan + Copy + Design + QA → assets appear in Inbox for approval. Uses your uploaded logo, font, and screenshots.
                 </p>
-                <button onClick={() => runPipeline('run')} disabled={running}
+                <button onClick={() => runPipeline('run')} disabled={running || uploads.length === 0}
+                  title={uploads.length === 0 ? 'Upload a logo first so the AI can match your brand' : undefined}
                   className="w-full flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] hover:bg-[#E8C97A] rounded-xl py-3 min-h-[48px] transition-all disabled:opacity-40"
                 >
                   {running ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
@@ -673,8 +688,14 @@ export default function ProjectPage() {
                 {!analyticsLoading && !analyticsError && analyticsAssets.length === 0 && (
                   <div className="rounded-xl border border-dashed border-[rgba(201,168,76,0.18)] bg-[rgba(201,168,76,0.04)] px-4 py-4">
                     <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">
-                      Analytics update every Sunday 6PM. Check back after first publish.
+                      Analytics update every Sunday 6PM. Approve content in Inbox to start publishing.
                     </p>
+                    <a
+                      href="/inbox"
+                      className="inline-flex mt-3 items-center font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] rounded-xl px-4 py-2 min-h-[44px] hover:bg-[rgba(201,168,76,0.08)] transition-all"
+                    >
+                      Go to Inbox →
+                    </a>
                   </div>
                 )}
 
@@ -756,6 +777,42 @@ function Row({ label, value }: { label: string; value: string | undefined }) {
     <div className="border-b border-[rgba(255,255,255,0.04)] pb-2 last:border-0">
       <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">{label}</p>
       <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.8)] mt-0.5">{value}</p>
+    </div>
+  )
+}
+
+function SetupProgress({
+  uploads,
+  hasPlan,
+  hasApprovedAssets,
+}: {
+  uploads: number
+  hasPlan: boolean
+  hasApprovedAssets: boolean
+}) {
+  const steps = [
+    { label: 'Upload logo', done: uploads > 0 },
+    { label: 'Generate plan', done: hasPlan },
+    { label: 'Approve & publish', done: hasApprovedAssets },
+  ]
+  const allDone = steps.every(step => step.done)
+  if (allDone) return null
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-3 mb-4 rounded-xl bg-[rgba(201,168,76,0.06)] border border-[rgba(201,168,76,0.15)] overflow-x-auto">
+      {steps.map((step, i) => (
+        <div key={step.label} className="flex items-center gap-2 shrink-0">
+          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+            step.done ? 'bg-[#10B981] text-white' : 'bg-[rgba(201,168,76,0.2)] text-[#C9A84C]'
+          }`}>
+            {step.done ? '✓' : i + 1}
+          </div>
+          <span className={`font-['IBM_Plex_Sans'] text-xs ${step.done ? 'text-[rgba(248,246,241,0.35)] line-through' : 'text-[rgba(248,246,241,0.7)]'}`}>
+            {step.label}
+          </span>
+          {i < steps.length - 1 && <div className="w-4 h-px bg-[rgba(255,255,255,0.1)]" />}
+        </div>
+      ))}
     </div>
   )
 }
