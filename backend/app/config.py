@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     NEXT_PUBLIC_API_URL: str = "http://localhost:8000"
     API_SECRET_KEY: str = ""
     RESEND_FROM_EMAIL: str = "sovereign@notifications.ai"
+    # Self-referential public URL — used for file serve links stored in DB
+    BACKEND_PUBLIC_URL: str = "https://backend-production-37a17.up.railway.app"
 
 
 @lru_cache

@@ -78,7 +78,8 @@ export default function DashboardPage() {
     }, 3000)
   }
 
-  const isRunning = polling || (activeJob?.jobId && !jobResult)
+  // Show status bar as soon as button is clicked (activeJob set), not just when polling starts
+  const isRunning = polling || (activeJob !== null && !jobResult)
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">

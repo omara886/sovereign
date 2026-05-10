@@ -5,9 +5,19 @@ export async function GET(req: NextRequest) {
   if (!url) return new NextResponse('missing url', { status: 400 })
 
   // Only proxy backend URLs — block arbitrary external URLs
-  const BACKEND = process.env.BACKEND_URL || 'https://backend-production-37a17.up.railway.app'
-  if (!url.startsWith(BACKEND) && !url.startsWith('https://backend-production-37a17')) {
+  const allowed = [
+    process.env.BACKEND_URL || 'https://backend-production-37a17.up.railway.app',
+    'https://backend-production-37a17.up.railway.app',
+    'https://sovereign-backend.railway.app',
+    'http://localhost:8000',
+  ]
+  if (!allowed.some(b => url.startsWith(b)) && !url.startsWith('file://')) {
     return new NextResponse('forbidden', { status: 403 })
+  }
+
+  // file:// URLs can't be fetched — return 404
+  if (url.startsWith('file://')) {
+    return new NextResponse('file not accessible', { status: 404 })
   }
 
   try {
