@@ -186,6 +186,23 @@ export default function DashboardPage() {
           </div>
         </AnimatedContent>
 
+        {!metricsLoading && (metrics?.total_assets_generated ?? 0) === 0 && (
+          <AnimatedContent delay={150}>
+            <div className="mb-6 rounded-xl border border-[rgba(201,168,76,0.2)] bg-[rgba(201,168,76,0.05)] px-5 py-4 flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full bg-[#C9A84C] text-[#0A0A0A] flex items-center justify-center font-bold text-sm shrink-0">1</div>
+              <div>
+                <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1] mb-1">Start with Therapia</p>
+                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)]">
+                  Upload your logo, generate a weekly plan, approve content, and it publishes automatically.
+                </p>
+                <Link href="/projects/therapia" className="inline-block mt-2 font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] hover:underline">
+                  Set up Therapia →
+                </Link>
+              </div>
+            </div>
+          </AnimatedContent>
+        )}
+
         {/* Job status bar */}
         {(isRunning || jobResult) && (
           <AnimatedContent delay={0}>
