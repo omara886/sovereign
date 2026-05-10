@@ -12,12 +12,13 @@ async function handler(req: NextRequest, { params }: { params: { path: string[] 
 
     if (contentType.includes('multipart/form-data')) {
       // Re-create FormData — lets fetch set the correct multipart boundary automatically
-      const incoming = await req.formData()
-      const outgoing = new FormData()
-      for (const [key, value] of incoming.entries()) {
-        outgoing.append(key, value)
+      // Forward raw bytes + content-type (including boundary) for multipart
+      const raw = await req.arrayBuffer()
+      fetchOptions = {
+        method: req.method,
+        headers: { 'content-type': contentType },
+        body: raw,
       }
-      fetchOptions = { method: req.method, body: outgoing }
     } else if (req.method !== 'GET' && req.method !== 'HEAD') {
       const body = await req.arrayBuffer()
       fetchOptions = {
