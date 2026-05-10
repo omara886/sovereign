@@ -25,42 +25,49 @@ MAX_SIZE = 10 * 1024 * 1024  # 10MB
 async def upload_file(
     project_slug: str,
     file: UploadFile = File(...),
-    file_type: str = Form(...),  # logo | screenshot | font | color_palette | other
+    file_type: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    project = (await db.execute(select(Project).where(Project.slug == project_slug))).scalar_one_or_none()
-    if not project:
-        raise HTTPException(404, "Project not found")
+    import traceback
+    try:
+        project = (await db.execute(select(Project).where(Project.slug == project_slug))).scalar_one_or_none()
+        if not project:
+            raise HTTPException(404, "Project not found")
 
-    content = await file.read()
-    if len(content) > MAX_SIZE:
-        raise HTTPException(400, "File too large — max 10MB")
+        content = await file.read()
+        if len(content) > MAX_SIZE:
+            raise HTTPException(400, "File too large — max 10MB")
 
-    content_type = file.content_type or "application/octet-stream"
-    ext = (file.filename or "file").rsplit(".", 1)[-1].lower()
-    filename = f"{project_slug}/{file_type}/{uuid.uuid4()}.{ext}"
+        content_type = file.content_type or "application/octet-stream"
+        ext = (file.filename or "file").rsplit(".", 1)[-1].lower()
+        filename = f"{project_slug}/{file_type}/{uuid.uuid4()}.{ext}"
 
-    url = await upload_to_r2(content, filename, content_type)
+        url = await upload_to_r2(content, filename, content_type)
 
-    # Update brand memory with the uploaded asset
-    brand = (await db.execute(select(BrandMemory).where(BrandMemory.project_id == project.id))).scalar_one_or_none()
-    if brand:
-        if file_type == "logo":
-            brand.logo_url = url
-        elif file_type == "font":
-            brand.arabic_font_url = url
-        elif file_type in ("screenshot", "color_palette", "other"):
-            templates = list(brand.templates or [])
-            templates.append({"name": file.filename, "type": file_type, "r2_url": url})
-            brand.templates = templates
-        await db.commit()
+        brand = (await db.execute(select(BrandMemory).where(BrandMemory.project_id == project.id))).scalar_one_or_none()
+        if brand:
+            if file_type == "logo":
+                brand.logo_url = url
+            elif file_type == "font":
+                brand.arabic_font_url = url
+            else:
+                from sqlalchemy.orm.attributes import flag_modified
+                templates = list(brand.templates or [])
+                templates.append({"name": file.filename, "type": file_type, "r2_url": url})
+                brand.templates = templates
+                flag_modified(brand, "templates")
+            await db.commit()
 
-    return {
-        "url": url,
-        "filename": file.filename,
-        "file_type": file_type,
-        "size_kb": round(len(content) / 1024, 1),
-    }
+        return {
+            "url": url,
+            "filename": file.filename,
+            "file_type": file_type,
+            "size_kb": round(len(content) / 1024, 1),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"{type(exc).__name__}: {str(exc)}\n{traceback.format_exc()[-500:]}")
 
 
 @router.get("/serve/{project_slug}/{file_type}/{filename}")
