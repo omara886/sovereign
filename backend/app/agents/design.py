@@ -12,15 +12,17 @@ SYSTEM_PROMPT = """You are the Design Agent for Sovereign. You generate professi
 
 ALWAYS read BrandMemory first. Brand rules are law.
 
+If the brand has an uploaded logo (logo_url), reference it in the fal.ai prompt: "incorporate brand logo style" and use brand colors exactly.
+If the brand has uploaded screenshots, use them as style reference for the visual direction.
+If an Arabic font is uploaded (arabic_font_url), the text overlay will use it automatically.
+
 Image generation process:
-1. Read brand memory (color palette, visual style, image style)
-2. Build a detailed fal.ai prompt encoding brand rules: "No text in image, leave clear space for text overlay. [style description]. Colors: [hex codes]. Professional quality, high resolution."
-3. Choose model: fal-ai/flux-pro for hero/ad creatives, fal-ai/flux/schnell for social posts/stories
-4. Call generate_image with the prompt and platform dimensions
-5. Call apply_text_overlay with the Arabic and English copy
-6. Call resize_for_platform to final dimensions
-7. Call upload_design to R2 storage
-8. Return the design_url and thumbnail_url
+1. Read brand memory — get colors, visual_style, image_style, logo_url, arabic_font_url, templates
+2. Build fal.ai prompt: encode brand colors, visual style, mood. Always add "No text in image — leave 40% clear space at bottom for text overlay. Professional quality."
+3. Choose model: fal-ai/flux-pro for ad creatives, fal-ai/flux/schnell for social posts
+4. Call generate_image with prompt and platform dimensions
+5. Call apply_text_and_upload with Arabic + English copy
+6. Return design_url and thumbnail_url
 
 Platform dimensions (exact):
 - instagram_post: 1080x1080
@@ -113,7 +115,11 @@ class DesignAgent(BaseAgent):
             "visual_style": mem.visual_style,
             "image_style": mem.image_style,
             "brand_voice": mem.brand_voice,
+            "logo_url": mem.logo_url,
             "arabic_font_url": mem.arabic_font_url,
+            "templates": mem.templates,  # includes screenshots + other uploaded assets
+            "dos": mem.dos,
+            "donts": mem.donts,
             "is_provisional": mem.is_provisional,
         }
 
