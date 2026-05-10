@@ -10,13 +10,6 @@ import { Badge } from '@/components/ui/Badge'
 import Link from 'next/link'
 import { CheckCircle, Clock, LayoutDashboard, Loader2, Play, TrendingUp, Zap } from 'lucide-react'
 
-const PROJECTS = [
-  { slug: 'therapia', name: 'Therapia', goal: 'App downloads + health assessments' },
-  { slug: 'qawwi', name: 'Qawwi', goal: 'B2B leads + demo requests' },
-  { slug: 'productbench', name: 'ProductBench', goal: 'Waitlist signups + paying customers' },
-  { slug: 'sahmalgo', name: 'SahmAlgo', goal: 'Followers + signups' },
-]
-
 const API = '/api/proxy'
 
 type JobStatus = { status: string; step: string; assets_passed_qa?: number; objective?: string; email_sent?: boolean }
@@ -24,6 +17,15 @@ type MetricsSummary = {
   published_assets: number
   pending_approvals: number
   total_assets_generated: number
+}
+type ProjectSummary = {
+  id: string
+  slug: string
+  name: string
+  primary_goal: string
+  status: string
+  pendingApprovals: number
+  hasPlan: boolean
 }
 type WeeklySummaryItem = {
   name: string
@@ -58,6 +60,8 @@ export default function DashboardPage() {
   const [polling, setPolling] = useState(false)
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
+  const [projects, setProjects] = useState<ProjectSummary[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
   const [weeklySummary, setWeeklySummary] = useState<WeeklySummaryItem[]>([])
   const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(true)
 
@@ -88,6 +92,31 @@ export default function DashboardPage() {
     }
   }, [])
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/projects`)
+      if (!res.ok) return
+      const data: Array<{ id: string; slug: string; name: string; primary_goal: string; status: string }> = await res.json()
+      const enriched = await Promise.all(data.map(async project => {
+        const [approvalsRes, planRes] = await Promise.all([
+          fetch(`${API}/approvals?status=pending&project_id=${project.id}`),
+          fetch(`${API}/plans/current/${project.slug}`),
+        ])
+        const approvals = approvalsRes.ok ? await approvalsRes.json() : []
+        return {
+          ...project,
+          pendingApprovals: Array.isArray(approvals) ? approvals.length : 0,
+          hasPlan: planRes.ok,
+        }
+      }))
+      setProjects(enriched)
+    } catch {
+      // keep the previous project snapshot on transient failures
+    } finally {
+      setProjectsLoading(false)
+    }
+  }, [])
+
   // Restore in-progress job on mount (survives page navigation)
   useEffect(() => {
     try {
@@ -103,11 +132,13 @@ export default function DashboardPage() {
   useEffect(() => {
     void loadMetrics()
     void loadWeeklySummary()
+    void loadProjects()
     const interval = window.setInterval(() => {
       void loadMetrics()
+      void loadProjects()
     }, 300000) // 5 minutes — metrics don't change often
     return () => window.clearInterval(interval)
-  }, [loadMetrics, loadWeeklySummary])
+  }, [loadMetrics, loadProjects, loadWeeklySummary])
 
   const triggerPipeline = async (slug: string, mode: 'plan' | 'run') => {
     setJobResult(null)
@@ -170,17 +201,20 @@ export default function DashboardPage() {
         <AnimatedContent delay={100}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {[
-              { icon: Clock, label: 'Pending Approvals', value: metrics?.pending_approvals ?? 0 },
-              { icon: CheckCircle, label: 'Published This Week', value: metrics?.published_assets ?? 0 },
-              { icon: TrendingUp, label: 'Total Assets', value: metrics?.total_assets_generated ?? 0 },
-              { icon: LayoutDashboard, label: 'Active Projects', value: PROJECTS.length },
-            ].map(({ icon: Icon, label, value }) => (
-              <Card key={label}>
-                <Icon size={16} className="text-[#C9A84C] mb-2" />
-                <p className="font-['IBM_Plex_Mono'] text-2xl text-[#F8F6F1] font-bold">
-                  {metricsLoading && !metrics ? <Loader2 size={18} className="animate-spin text-[#C9A84C]" /> : <CountUp end={value} />}
+              { icon: Clock, label: 'Pending Approvals', value: metrics?.pending_approvals ?? 0, accent: (metrics?.pending_approvals ?? 0) > 0 ? '#C9A84C' : 'rgba(201,168,76,0.75)' },
+              { icon: CheckCircle, label: 'Published This Week', value: metrics?.published_assets ?? 0, accent: (metrics?.published_assets ?? 0) > 0 ? '#10B981' : '#F8F6F1' },
+              { icon: TrendingUp, label: 'Total Assets', value: metrics?.total_assets_generated ?? 0, accent: '#F8F6F1' },
+              { icon: LayoutDashboard, label: 'Active Projects', value: projects.length, accent: '#C9A84C' },
+            ].map(({ icon: Icon, label, value, accent }, index) => (
+              <Card key={label} className={`relative overflow-hidden border ${index === 0 ? 'border-[rgba(201,168,76,0.18)]' : 'border-[rgba(255,255,255,0.06)]'}`}>
+                <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[rgba(201,168,76,0.18)] to-transparent" />
+                <Icon size={16} className="mb-2" style={{ color: accent }} />
+                <p className="font-['IBM_Plex_Mono'] text-3xl md:text-[2.1rem] font-bold tracking-tight" style={{ color: accent }}>
+                  {(index === 3 && projectsLoading) || (index < 3 && metricsLoading && !metrics)
+                    ? <Loader2 size={20} className="animate-spin text-[#C9A84C]" />
+                    : <CountUp end={value} />}
                 </p>
-                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-1 leading-snug">{label}</p>
+                <p className="font-['IBM_Plex_Sans'] text-[10px] uppercase tracking-[0.18em] text-[rgba(248,246,241,0.45)] mt-2 leading-snug">{label}</p>
               </Card>
             ))}
           </div>
@@ -246,16 +280,61 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {PROJECTS.map((project, i) => (
-              <AnimatedContent key={project.slug} delay={250 + i * 60}>
+            {projectsLoading && projects.length === 0 ? Array.from({ length: 4 }).map((_, i) => (
+              <AnimatedContent key={`project-skeleton-${i}`} delay={250 + i * 40}>
+                <Card className="min-h-[178px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] animate-pulse">
+                  <div className="h-4 w-24 rounded-full bg-[rgba(255,255,255,0.06)] mb-3" />
+                  <div className="h-3 w-40 rounded-full bg-[rgba(255,255,255,0.06)] mb-2" />
+                  <div className="h-3 w-32 rounded-full bg-[rgba(255,255,255,0.06)] mb-6" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="h-10 rounded-xl bg-[rgba(255,255,255,0.05)]" />
+                    <div className="h-10 rounded-xl bg-[rgba(255,255,255,0.05)]" />
+                  </div>
+                </Card>
+              </AnimatedContent>
+            )) : projects.map((project, i) => {
+              const projectIsRunning = activeJob?.project === project.slug && isRunning
+              const statusBadge = projectIsRunning ? (
+                <Badge variant="gold" className="gap-1">
+                  <Loader2 size={10} className="animate-spin" />
+                  Running
+                </Badge>
+              ) : project.pendingApprovals > 0 ? (
+                <Badge variant="gold">{project.pendingApprovals} pending</Badge>
+              ) : !project.hasPlan ? (
+                <Badge variant="default">Not started</Badge>
+              ) : project.status === 'active' ? (
+                <Badge variant="success">Ready</Badge>
+              ) : (
+                <Badge variant="default">{project.status}</Badge>
+              )
+              const cardTone = projectIsRunning
+                ? 'border-[rgba(201,168,76,0.22)] bg-[linear-gradient(180deg,rgba(201,168,76,0.08),rgba(255,255,255,0.02))]'
+                : project.pendingApprovals > 0
+                ? 'border-[rgba(201,168,76,0.18)] bg-[linear-gradient(180deg,rgba(201,168,76,0.06),rgba(255,255,255,0.02))]'
+                : !project.hasPlan
+                ? 'border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)]'
+                : 'border-[rgba(16,185,129,0.14)] bg-[linear-gradient(180deg,rgba(16,185,129,0.05),rgba(255,255,255,0.02))]'
+              const helperText = projectIsRunning
+                ? 'Pipeline is running now'
+                : project.pendingApprovals > 0
+                ? 'Needs review in Inbox'
+                : !project.hasPlan
+                ? 'Upload assets to begin'
+                : 'Plan ready and waiting'
+
+              return (
+                <AnimatedContent key={project.slug} delay={250 + i * 60}>
                 <SpotlightCard>
-                  <Card>
-                    <div className="flex items-start justify-between mb-2">
+                  <Card className={`relative overflow-hidden ${cardTone}`}>
+                    <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[rgba(201,168,76,0.24)] to-transparent" />
+                    <div className="flex items-start justify-between mb-2 gap-3">
                       <div>
                         <h3 className="font-['IBM_Plex_Sans'] text-base text-[#F8F6F1] font-semibold">{project.name}</h3>
-                        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-0.5">{project.goal}</p>
+                        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-0.5">{project.primary_goal}</p>
+                        <p className="font-['IBM_Plex_Sans'] text-[11px] text-[rgba(248,246,241,0.55)] mt-2">{helperText}</p>
                       </div>
-                      <Badge variant="success">Active</Badge>
+                      {statusBadge}
                     </div>
 
                     {/* Action buttons */}
@@ -280,7 +359,8 @@ export default function DashboardPage() {
                   </Card>
                 </SpotlightCard>
               </AnimatedContent>
-            ))}
+              )
+            })}
           </div>
         </AnimatedContent>
 
