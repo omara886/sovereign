@@ -8,7 +8,6 @@ import { FetchError } from '@/components/ui/FetchError'
 import { ProjectImage } from '@/components/ui/ProjectImage'
 import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, Eye, ImageOff } from "lucide-react"
 
-const FILTERS = ['All', 'Therapia', 'Qawwi', 'ProductBench', 'SahmAlgo']
 const CHANNEL_LABELS: Record<string, string> = {
   instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X / Twitter', google_ads: 'Google Ads'
 }
@@ -19,13 +18,6 @@ interface Asset { id: string; project_id: string; type: string; channel: string;
 interface WeeklyPlan { id: string; objective: string; funnel_focus: string; rationale: string; tactics: unknown[]; status: string; total_budget_estimate: number }
 interface Project { id: string; slug: string; name: string }
 interface PublishJob { id: string; asset_id: string; approval_id: string; channel: string; scheduled_at: string; published_at: string | null; platform_post_id: string | null; status: string; error_message: string | null }
-
-const PROJECT_FILTERS: Record<string, string> = {
-  Therapia: 'therapia',
-  Qawwi: 'qawwi',
-  ProductBench: 'productbench',
-  SahmAlgo: 'sahmalgo',
-}
 
 function resolveImgUrl(url: string): string {
   if (url.startsWith('data:')) return url
@@ -226,8 +218,7 @@ export default function InboxPage() {
   }, [fetchProjects])
 
   const loadPublishJobs = useCallback(async () => {
-    const slug = PROJECT_FILTERS[filter]
-    const project = projects.find(p => p.slug === slug)
+    const project = filter === 'All' ? null : projects.find(p => p.slug === filter)
     const url = project ? `${API}/publish-jobs?project_id=${project.id}` : `${API}/publish-jobs`
     const res = await fetch(url)
     if (res.ok) setPublishedJobs(await res.json())
@@ -285,8 +276,7 @@ export default function InboxPage() {
   const hasPublished = publishedJobs.length > 0
   const activePublishedJobs = useMemo(() => {
     if (filter === 'All') return publishedJobs
-    const slug = PROJECT_FILTERS[filter]
-    const project = projects.find(p => p.slug === slug)
+    const project = projects.find(p => p.slug === filter)
     if (!project) return publishedJobs
     return publishedJobs.filter(job => {
       const asset = assets[job.asset_id]
@@ -335,10 +325,13 @@ export default function InboxPage() {
 
       <div className="max-w-3xl mx-auto px-4 md:px-8 pt-5 pb-[7rem]">
         <div className="flex gap-2 overflow-x-auto pb-4 mb-5">
-          {FILTERS.map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`shrink-0 font-['IBM_Plex_Sans'] text-sm px-4 py-2.5 rounded-full border transition-all min-h-[44px] ${filter === f ? 'bg-[rgba(201,168,76,0.15)] border-[rgba(201,168,76,0.4)] text-[#C9A84C]' : 'border-[rgba(255,255,255,0.08)] text-[rgba(248,246,241,0.5)]'}`}>{f}</button>
-          ))}
+          {(['All', ...projects.map(p => p.slug)] as string[]).map(f => {
+            const label = f === 'All' ? 'All' : (projects.find(p => p.slug === f)?.name ?? f)
+            return (
+              <button key={f} onClick={() => setFilter(f)}
+                className={`shrink-0 font-['IBM_Plex_Sans'] text-sm px-4 py-2.5 rounded-full border transition-all min-h-[44px] ${filter === f ? 'bg-[rgba(201,168,76,0.15)] border-[rgba(201,168,76,0.4)] text-[#C9A84C]' : 'border-[rgba(255,255,255,0.08)] text-[rgba(248,246,241,0.5)]'}`}>{label}</button>
+            )
+          })}
         </div>
 
         {!loading && !error && pending.length > 1 && (

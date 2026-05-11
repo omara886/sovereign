@@ -11,12 +11,6 @@ import { FetchError } from '@/components/ui/FetchError'
 
 const API = '/api/proxy'
 
-const PROJECTS = [
-  { slug: 'therapia', name: 'Therapia' },
-  { slug: 'qawwi', name: 'Qawwi' },
-  { slug: 'productbench', name: 'ProductBench' },
-  { slug: 'sahmalgo', name: 'SahmAlgo' },
-]
 
 type Plan = {
   id: string
@@ -104,12 +98,6 @@ export default function PlanWeekPage() {
     void load()
   }, [load])
 
-  const projectMap = useMemo(() => {
-    const map = new Map<string, ProjectRecord>()
-    projects.forEach(project => map.set(project.slug, project))
-    return map
-  }, [projects])
-
   const totalBudget = plans.reduce((sum, plan) => sum + Number(plan.total_budget_estimate || 0), 0)
   const plansByProject = useMemo(() => {
     const map = new Map<string, Plan>()
@@ -156,15 +144,14 @@ export default function PlanWeekPage() {
             </div>
           </Card>
         ) : (
-          PROJECTS.map((project, index) => {
-            const projectData = projectMap.get(project.slug)
-            const plan = projectData ? plansByProject.get(projectData.id) : undefined
+          projects.map((project, index) => {
+            const plan = plansByProject.get(project.id)
             return (
               <AnimatedContent key={project.slug} delay={index * 60}>
                 <Card>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
-                      <h2 className="font-['IBM_Plex_Sans'] text-base text-[#F8F6F1] font-semibold">{projectData?.name || project.name}</h2>
+                      <h2 className="font-['IBM_Plex_Sans'] text-base text-[#F8F6F1] font-semibold">{project.name}</h2>
                       <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-1">{project.slug}</p>
                     </div>
                     {plan ? <Badge variant={plan.status === 'approved' ? 'success' : 'gold'}>{plan.status}</Badge> : <Badge variant="default">No plan</Badge>}

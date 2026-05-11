@@ -15,9 +15,10 @@ except ModuleNotFoundError:
     boto3 = None
     Config = None
 
-# Max size to store as base64 in DB (user uploads: logos, screenshots)
-# Larger files (AI-generated designs) still use /tmp serve
-_MAX_BASE64_BYTES = 300 * 1024  # 300 KB
+# Max size to store as base64 in DB
+# PNG designs get JPEG-recompressed first; post-compression limit is 1.5 MB
+_MAX_BASE64_BYTES = 300 * 1024       # 300 KB (small uploads: logos, thumbnails)
+_MAX_BASE64_BYTES_LARGE = 1_500_000  # 1.5 MB (AI-generated designs after JPEG recompression)
 
 _IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/svg+xml"}
 
@@ -108,17 +109,33 @@ async def upload_to_r2(file_bytes: bytes, filename: str, content_type: str = "ap
         logger.info("Uploaded to R2 bucket=%s key=%s", bucket, filename)
         return build_r2_url(filename)
 
-    # Strategy 2: Small images only → base64 data URL (permanent, survives restarts, no file system)
-    # User uploads stay small; large generated images should use /tmp so the browser never gets a multi-MB data URL.
-    if content_type in _IMAGE_TYPES and len(file_bytes) <= _MAX_BASE64_BYTES:
-        b64 = base64.b64encode(file_bytes).decode("utf-8")
-        return f"data:{content_type};base64,{b64}"
+    # Strategy 2: Images without R2 → base64 data URL (permanent, survives restarts)
+    # Small images (logos, thumbs): stored as-is. Large PNGs: JPEG-recompressed first.
+    if content_type in _IMAGE_TYPES:
+        target_bytes = file_bytes
+        target_ct = content_type
+        if len(file_bytes) > _MAX_BASE64_BYTES and content_type == "image/png":
+            try:
+                from io import BytesIO as _BytesIO
+                from PIL import Image as _Image
+                img = _Image.open(_BytesIO(file_bytes)).convert("RGB")
+                buf = _BytesIO()
+                img.save(buf, format="JPEG", quality=85, optimize=True)
+                target_bytes = buf.getvalue()
+                target_ct = "image/jpeg"
+                logger.debug("Recompressed PNG→JPEG: %d KB → %d KB", len(file_bytes)//1024, len(target_bytes)//1024)
+            except Exception as e:
+                logger.warning("JPEG recompression failed: %s — using original", e)
+        if len(target_bytes) <= _MAX_BASE64_BYTES_LARGE:
+            b64 = base64.b64encode(target_bytes).decode("utf-8")
+            return f"data:{target_ct};base64,{b64}"
 
-    # Strategy 3: Large or non-image file → /tmp serve (breaks on restart)
+    # Strategy 3: Non-image or very large file → /tmp serve (breaks on restart — configure R2 to avoid)
     target = Path("/tmp/sovereign_r2") / filename
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(file_bytes)
     backend_base = settings.BACKEND_PUBLIC_URL or "https://backend-production-37a17.up.railway.app"
+    logger.warning("Storing to /tmp (ephemeral) — configure R2 for permanent storage: %s", filename)
     return f"{backend_base.rstrip('/')}/api/uploads/serve/{filename}"
 
 
