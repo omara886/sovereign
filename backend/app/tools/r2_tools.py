@@ -2,12 +2,16 @@ import base64
 import io
 from pathlib import Path
 
-import boto3
-from botocore.config import Config
-
 from app.config import get_settings
 
 settings = get_settings()
+
+try:
+    import boto3
+    from botocore.config import Config
+except ModuleNotFoundError:
+    boto3 = None
+    Config = None
 
 # Max size to store as base64 in DB (user uploads: logos, screenshots)
 # Larger files (AI-generated designs) still use /tmp serve
@@ -18,6 +22,8 @@ _IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif
 
 def _get_client():
     """Return boto3 S3 client for Cloudflare R2. None if credentials missing or invalid."""
+    if boto3 is None or Config is None:
+        return None
     account_id = (settings.R2_ACCOUNT_ID or "").strip()
     access_key = (settings.R2_ACCESS_KEY_ID or "").strip()
     secret_key = (settings.R2_SECRET_ACCESS_KEY or "").strip()

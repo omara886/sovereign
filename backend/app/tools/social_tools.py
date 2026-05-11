@@ -9,6 +9,8 @@ async def publish_to_linkedin(asset, org_id: str, access_token: str) -> str:
         return "linkedin_not_configured"
 
     copy = asset.copy_en or asset.copy_ar or ""
+    if asset.design_url:
+        copy = f"{copy}\n\nPreview: {asset.design_url}".strip()
     payload: dict = {
         "author": f"urn:li:organization:{org_id}",
         "lifecycleState": "PUBLISHED",
@@ -20,10 +22,6 @@ async def publish_to_linkedin(asset, org_id: str, access_token: str) -> str:
         },
         "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
     }
-
-    if asset.design_url:
-        # TODO: media upload flow (register asset → upload binary → reference in post)
-        pass
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(

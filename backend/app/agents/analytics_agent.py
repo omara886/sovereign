@@ -4,7 +4,7 @@ from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.agents.base import BaseAgent
+from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.memory_tools import get_project_memory, update_project_memory
 from app.tools.notify_tools import send_email_resend, send_telegram_notification
 from app.config import get_settings

@@ -12,9 +12,9 @@ async def process_publish_queue(db: AsyncSession) -> int:
         if not asset:
             continue
         job.status = "published"
-        job.platform_post_id = "mock_123"
+        job.platform_post_id = f"publish_{job.channel}_{job.id}"
         asset.status = "published"
-        asset.platform_post_id = "mock_123"
+        asset.platform_post_id = job.platform_post_id
         count += 1
     await db.commit()
     return count

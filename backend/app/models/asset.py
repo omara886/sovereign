@@ -2,12 +2,16 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ModuleNotFoundError:
+    Vector = None
 
 
 class Asset(Base):
@@ -35,6 +39,6 @@ class Asset(Base):
     edit_instructions: Mapped[str | None] = mapped_column(Text)
     platform_post_id: Mapped[str | None] = mapped_column(Text)
     variants: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536) if Vector else JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
