@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date
+from datetime import date, datetime, timezone
 
 from app.database import get_db
 from app.models.project import Project
@@ -324,7 +324,6 @@ async def job_detail(job_id: str):
 @router.post("/jobs/{job_id}/report")
 async def report_step(job_id: str, payload: dict):
     """Lab: report a problem with a specific step or the overall job."""
-    # payload: {step_index: int|None, issue: str, category: str}
     job = _jobs.get(job_id)
     if not job:
         raise HTTPException(404, "job not found")
@@ -337,3 +336,156 @@ async def report_step(job_id: str, payload: dict):
     }
     _reports.setdefault(job_id, []).append(report)
     return {"reported": True, "report": report}
+
+
+# ── Lab control-room status ───────────────────────────────────────────────────
+
+AGENT_SEQUENCE = [
+    {"key": "strategy",   "name": "Strategy Agent",     "icon": "🧠"},
+    {"key": "copy",       "name": "Copy Agent",          "icon": "✍️"},
+    {"key": "localize",   "name": "Localization Agent",  "icon": "🌍"},
+    {"key": "design",     "name": "Design Agent",        "icon": "🎨"},
+    {"key": "qa",         "name": "QA Agent",            "icon": "✅"},
+    {"key": "approval",   "name": "Approval Agent",      "icon": "📨"},
+    {"key": "publish",    "name": "Publishing Agent",    "icon": "🚀"},
+    {"key": "analytics",  "name": "Analytics Agent",     "icon": "📊"},
+    {"key": "brand",      "name": "Brand Agent",         "icon": "🏷️"},
+]
+
+_AGENT_KEYWORDS = {
+    "strategy":  ["strategy", "plan", "tactic"],
+    "copy":      ["copy", "writing", "content"],
+    "localize":  ["localiz", "arabic", "rtl", "gulf"],
+    "design":    ["design", "fal", "image", "visual"],
+    "qa":        ["qa", "quality", "check", "validat"],
+    "approval":  ["approval", "inbox", "notif", "email", "telegram"],
+    "publish":   ["publish", "schedul", "post"],
+    "analytics": ["analytic", "metric", "insight"],
+    "brand":     ["brand", "logo", "color", "font"],
+}
+
+
+def _infer_agent_key(step_text: str, agent_name: str) -> str:
+    text = (step_text + " " + agent_name).lower()
+    for key, keywords in _AGENT_KEYWORDS.items():
+        if any(kw in text for kw in keywords):
+            return key
+    return ""
+
+
+def _build_agent_statuses(job: dict | None) -> list[dict]:
+    agents = []
+    if not job:
+        for a in AGENT_SEQUENCE:
+            agents.append({**a, "status": "idle", "last_output": "", "time_taken": "", "error": None})
+        return agents
+
+    steps = job.get("steps_history", [])
+    current_step = job.get("step", "")
+    current_agent_key = _infer_agent_key(current_step, job.get("agent", ""))
+    job_status = job.get("status", "running")
+
+    for a in AGENT_SEQUENCE:
+        key = a["key"]
+        # Find this agent's steps
+        agent_steps = [s for s in steps if _infer_agent_key(s.get("step", ""), s.get("agent", "")) == key]
+        if agent_steps:
+            last = agent_steps[-1]
+            duration = ""
+            if len(agent_steps) >= 2:
+                duration = f"{round(agent_steps[-1]['ts'] - agent_steps[0]['ts'], 1)}s"
+            status = "done"
+            if job_status == "running" and key == current_agent_key:
+                status = "running"
+            agents.append({
+                **a,
+                "status": status,
+                "last_output": last.get("step", ""),
+                "time_taken": duration,
+                "error": None,
+            })
+        elif key == current_agent_key and job_status == "running":
+            agents.append({**a, "status": "running", "last_output": current_step, "time_taken": "", "error": None})
+        elif job_status == "error" and key == current_agent_key:
+            agents.append({**a, "status": "error", "last_output": current_step, "time_taken": "", "error": job.get("error")})
+        else:
+            agents.append({**a, "status": "idle", "last_output": "", "time_taken": "", "error": None})
+
+    return agents
+
+
+@router.get("/lab/status")
+async def lab_status(db: AsyncSession = Depends(get_db)):
+    """Lab control-room: pipeline status, agent cards, health checks, pending approvals."""
+    from app.models.asset import Asset
+    from app.models.approval import Approval
+    from app.config import get_settings
+    import os
+
+    # Derive current pipeline state from most recent job
+    latest_job = _JOB_HISTORY[0] if _JOB_HISTORY else None
+    pipeline_status = "idle"
+    if latest_job:
+        pipeline_status = latest_job["status"]  # running / done / error
+
+    # Pending approvals with asset previews
+    pending_rows = (await db.execute(
+        select(Approval, Asset)
+        .join(Asset, Asset.id == Approval.asset_id, isouter=True)
+        .where(Approval.decision.is_(None))
+        .order_by(Approval.created_at.desc())
+        .limit(10)
+    )).all()
+    pending_approvals = []
+    for approval, asset in pending_rows:
+        pending_approvals.append({
+            "id": str(approval.id),
+            "asset_id": str(approval.asset_id) if approval.asset_id else None,
+            "copy_ar": asset.copy_ar if asset else None,
+            "copy_en": asset.copy_en if asset else None,
+            "channel": asset.channel if asset else None,
+            "thumbnail_url": asset.design_thumbnail_url if asset else None,
+        })
+
+    # Recent log entries from latest job's steps
+    recent_logs = []
+    if latest_job:
+        for s in (latest_job.get("steps_history") or [])[-20:]:
+            recent_logs.append({
+                "ts": s.get("ts"),
+                "agent": s.get("agent", ""),
+                "step": s.get("step", ""),
+                "sources": s.get("data_sources", []),
+                "decisions": s.get("decisions", []),
+            })
+
+    # Health checks (sync — no external calls)
+    settings = get_settings()
+    health = {
+        "fal_key_set": bool((settings.FAL_KEY or "").strip()),
+        "r2_configured": bool(
+            (settings.R2_ACCOUNT_ID or "").strip() and
+            (settings.R2_ACCESS_KEY_ID or "").strip()
+        ),
+        "anthropic_key_set": bool((settings.ANTHROPIC_API_KEY or "").strip()),
+        "thmanyah_font_exists": os.path.exists(
+            "assets/fonts/thmanyah typeface/thmanyahsans/otf/thmanyahsans-Bold.otf"
+        ),
+    }
+    try:
+        health["db_tables"] = bool(await db.scalar(
+            select(func.count()).select_from(Project)
+        ) is not None)
+    except Exception:
+        health["db_tables"] = False
+
+    return {
+        "pipeline_status": pipeline_status,
+        "last_run": datetime.fromtimestamp(latest_job["started_at"], tz=timezone.utc).isoformat() if latest_job else None,
+        "last_run_project": latest_job.get("project_name", "") if latest_job else "",
+        "agents": _build_agent_statuses(latest_job),
+        "recent_logs": recent_logs,
+        "health": health,
+        "pending_approvals": pending_approvals,
+        "jobs_today": sum(1 for j in _JOB_HISTORY if j.get("started_at", 0) > time.time() - 86400),
+    }

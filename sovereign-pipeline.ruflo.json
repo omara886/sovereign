@@ -1,0 +1,75 @@
+{
+  "name": "sovereign-content-pipeline",
+  "description": "Sovereign weekly content pipeline — Strategy → Copy → Design → QA → Approval",
+  "version": "1.0.0",
+  "steps": [
+    {
+      "id": "strategy",
+      "name": "Strategy Agent",
+      "description": "Read project memory, brand data, metric history. Generate weekly plan.",
+      "endpoint": "/api/pipeline/plan/{project_slug}",
+      "method": "POST",
+      "retries": 3,
+      "timeout_seconds": 120,
+      "on_success": "copy",
+      "on_failure": "notify_omar"
+    },
+    {
+      "id": "copy",
+      "name": "Copy + Localization Agent",
+      "description": "Generate bilingual copy per tactic. Gulf Saudi Arabic tone. RTL enforced.",
+      "depends_on": ["strategy"],
+      "retries": 2,
+      "timeout_seconds": 90,
+      "on_success": "design",
+      "on_failure": "notify_omar"
+    },
+    {
+      "id": "design",
+      "name": "Design Agent",
+      "description": "fal.ai scene generation. Thmanyah Arabic overlay. Brand colors applied.",
+      "depends_on": ["copy"],
+      "retries": 3,
+      "timeout_seconds": 180,
+      "on_success": "qa",
+      "on_failure": "notify_omar"
+    },
+    {
+      "id": "qa",
+      "name": "QA Agent",
+      "description": "Validate copy tone, check excluded topics, score asset 0-100.",
+      "depends_on": ["design"],
+      "retries": 1,
+      "timeout_seconds": 60,
+      "on_success": "approval",
+      "on_failure": "notify_omar"
+    },
+    {
+      "id": "approval",
+      "name": "Approval Agent",
+      "description": "Notify Omar via email + Telegram. Assets queued in inbox.",
+      "depends_on": ["qa"],
+      "retries": 2,
+      "timeout_seconds": 30,
+      "on_success": "done",
+      "on_failure": "notify_omar"
+    },
+    {
+      "id": "notify_omar",
+      "name": "Error Handler",
+      "description": "Send failure details to Omar via Telegram.",
+      "type": "error_handler",
+      "endpoint": "/api/webhook/telegram",
+      "method": "POST"
+    }
+  ],
+  "schedule": {
+    "cron": "0 7 * * 1",
+    "description": "Every Monday at 7am — run full pipeline for all active projects",
+    "timezone": "Asia/Riyadh"
+  },
+  "audit": {
+    "table": "audit_events",
+    "log_every_step": true
+  }
+}
