@@ -12,11 +12,10 @@ interface ProjectImageProps {
 function fix(url: string | null): string | null {
   if (!url) return null
   if (url.startsWith('data:')) return url
-  if (url.includes('sovereign-backend.railway.app')) url = url.replace('sovereign-backend', 'backend-production-37a17')
   if (url.startsWith('file://')) return null
-  if (url.includes('railway.app') || url.includes('localhost')) {
-    return `/api/img?url=${encodeURIComponent(url)}`
-  }
+  if (url.includes('...r2.dev/')) return `/api/img?url=${encodeURIComponent(url)}`
+  if (url.includes('sovereign-backend.railway.app')) url = url.replace('sovereign-backend', 'backend-production-37a17')
+  if (url.includes('railway.app') || url.includes('localhost')) return `/api/img?url=${encodeURIComponent(url)}`
   return url
 }
 

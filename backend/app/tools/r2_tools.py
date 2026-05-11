@@ -54,7 +54,8 @@ def _get_client():
 
 def build_r2_url(filename: str) -> str:
     public_base = (settings.R2_PUBLIC_URL or "").strip()
-    if public_base:
+    # Reject bogus placeholder URLs (e.g. "https://...r2.dev" set in Railway env)
+    if public_base and "..." not in public_base and public_base.startswith("http"):
         return f"{public_base.rstrip('/')}/{filename}"
     backend_base = (settings.BACKEND_PUBLIC_URL or "https://backend-production-37a17.up.railway.app").rstrip("/")
     return f"{backend_base}/api/uploads/r2/{filename}"

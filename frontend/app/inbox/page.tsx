@@ -20,10 +20,13 @@ interface Project { id: string; slug: string; name: string }
 interface PublishJob { id: string; asset_id: string; approval_id: string; channel: string; scheduled_at: string; published_at: string | null; platform_post_id: string | null; status: string; error_message: string | null }
 
 function resolveImgUrl(url: string): string {
+  if (!url) return ''
   if (url.startsWith('data:')) return url
+  if (url.startsWith('file://')) return ''
+  // Bogus R2 placeholder URL — proxy via /api/img which fetches from real R2
+  if (url.includes('...r2.dev/')) return `/api/img?url=${encodeURIComponent(url)}`
   if (url.includes('sovereign-backend.railway.app'))
     url = url.replace('sovereign-backend', 'backend-production-37a17')
-  if (url.startsWith('file://')) return ''
   if (url.includes('railway.app') || url.includes('localhost'))
     return `/api/img?url=${encodeURIComponent(url)}`
   return url
