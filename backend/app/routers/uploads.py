@@ -3,14 +3,14 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import SessionLocal, get_db
 from app.models.project import Project
 from app.models.brand_memory import BrandMemory
-from app.tools.r2_tools import upload_to_r2
+from app.tools.r2_tools import fetch_r2_object, upload_to_r2
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 LOCAL_FALLBACK_DIR = Path("/tmp/sovereign_r2")
@@ -96,6 +96,18 @@ async def serve_file(project_slug: str, file_type: str, filename: str):
     if not path.exists():
         raise HTTPException(404, "File not found")
     return FileResponse(path)
+
+
+@router.get("/r2/{project_slug}/{file_type}/{filename}")
+async def serve_r2_file(project_slug: str, file_type: str, filename: str):
+    key = f"{project_slug}/{file_type}/{filename}"
+    content, content_type = await fetch_r2_object(key)
+    if content is None:
+        local_path = LOCAL_FALLBACK_DIR / project_slug / file_type / filename
+        if local_path.exists():
+            return FileResponse(local_path)
+        raise HTTPException(404, "File not found")
+    return Response(content=content, media_type=content_type or "application/octet-stream")
 
 
 @router.post("/{project_slug}/analyze-now")

@@ -15,40 +15,44 @@ async def generate_image_fal(prompt: str, model: str, width: int, height: int) -
         logger.warning("FAL_KEY not set — using placeholder")
         return _placeholder(width, height)
 
-    # fal.ai correct endpoint format
-    url = f"https://fal.run/{model}"
-    headers = {
-        "Authorization": f"Key {settings.FAL_KEY}",
-        "Content-Type": "application/json",
-    }
-    body = {
-        "prompt": prompt,
-        "image_size": {"width": width, "height": height},
-        "num_images": 1,
-        "enable_safety_checker": False,
-    }
-
-    logger.info("fal.ai POST %s | %dx%d | prompt=%.60s", url, width, height, prompt)
-
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            r = await client.post(url, headers=headers, json=body)
-            logger.info("fal.ai response: %d | %s", r.status_code, r.text[:200])
-            r.raise_for_status()
-            data = r.json()
-            images = data.get("images", [])
-            if not images:
-                logger.error("fal.ai returned no images: %s", data)
-                return _placeholder(width, height)
-            image_url = images[0]["url"]
-            logger.info("fal.ai image url: %s", image_url)
+        import fal_client
+
+        arguments = {
+            "prompt": prompt,
+            "image_size": {"width": width, "height": height},
+            "num_images": 1,
+            "num_inference_steps": 4,
+            "guidance_scale": 3.5,
+            "enable_safety_checker": False,
+            "output_format": "png",
+        }
+
+        logger.info("fal.ai subscribe %s | %dx%d | prompt=%.60s", model, width, height, prompt)
+
+        def _log_update(update):
+            logger.info("fal.ai queue update: %s", update)
+
+        result = await fal_client.subscribe_async(
+            model,
+            arguments=arguments,
+            with_logs=True,
+            on_queue_update=_log_update,
+        )
+        logger.info("fal.ai result keys: %s", list(result.keys()))
+        images = result.get("images") or []
+        if not images:
+            logger.error("fal.ai returned no images: %s", result)
+            return _placeholder(width, height)
+
+        image = images[0]
+        image_url = image["url"] if isinstance(image, dict) else image
+        logger.info("fal.ai image url: %s", image_url)
+        async with httpx.AsyncClient(timeout=60) as client:
             img_r = await client.get(image_url, timeout=60)
             img_r.raise_for_status()
             logger.info("fal.ai downloaded %d bytes", len(img_r.content))
             return img_r.content
-    except httpx.HTTPStatusError as e:
-        logger.error("fal.ai HTTP error %d: %s", e.response.status_code, e.response.text[:300])
-        return _placeholder(width, height)
     except Exception as e:
         logger.error("fal.ai exception: %s", type(e).__name__, exc_info=True)
         return _placeholder(width, height)
