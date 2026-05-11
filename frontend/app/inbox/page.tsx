@@ -37,61 +37,25 @@ function resolveImgUrl(url: string): string {
   return url
 }
 
-function ImageViewer({ url }: { url: string | null | undefined }) {
-  const [fullscreen, setFullscreen] = useState(false)
+function ImageViewer({ url, onFullscreen }: { url: string | null | undefined; onFullscreen: (u: string) => void }) {
   const [broken, setBroken] = useState(false)
   if (!url) return null
   const src = resolveImgUrl(url)
   if (!src) return null
-
   return (
-    <>
-      {/* Fullscreen — fixed overlay, highest z-index */}
-      {fullscreen && (
-        <div
-          className="fixed inset-0 z-[999] bg-black flex items-center justify-center"
-          onClick={() => setFullscreen(false)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt="Full design"
-            style={{ maxWidth: '100vw', maxHeight: '100vh', objectFit: 'contain' }}
-            onError={() => setBroken(true)}
-          />
-          <button
-            className="absolute top-4 right-4 text-white bg-[rgba(0,0,0,0.6)] rounded-full p-3 min-h-[48px] min-w-[48px] flex items-center justify-center text-2xl leading-none"
-            onClick={e => { e.stopPropagation(); setFullscreen(false) }}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {/* Preview card — tap to fullscreen */}
-      <div className="px-5 pt-5">
-        <button
-          type="button"
-          className="w-full block cursor-pointer"
-          onClick={() => setFullscreen(true)}
-        >
-          {broken ? (
-            <div className="w-full aspect-square rounded-xl bg-[#0A0A0A] flex items-center justify-center">
-              <ImageOff size={32} className="text-[rgba(248,246,241,0.1)]" />
-            </div>
-          ) : (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={src}
-              alt="Design preview"
-              style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: 10 }}
-              onError={() => setBroken(true)}
-            />
-          )}
-          <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.35)] text-center mt-2">Tap to view full size</p>
-        </button>
-      </div>
-    </>
+    <div className="px-5 pt-5">
+      <button type="button" style={{ width: '100%', display: 'block', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => onFullscreen(url)}>
+        {broken ? (
+          <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10, background: '#0A0A0A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ImageOff size={32} style={{ color: 'rgba(248,246,241,0.1)' }} />
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: 10, display: 'block' }} onError={() => setBroken(true)} />
+        )}
+        <p style={{ fontSize: 11, color: 'rgba(248,246,241,0.35)', textAlign: 'center', marginTop: 8 }}>Tap image to view full size</p>
+      </button>
+    </div>
   )
 }
 
@@ -118,9 +82,10 @@ function PlanSummary({ planId }: { planId: string }) {
   )
 }
 
-function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }: {
+function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding, onFullscreen }: {
   approval: Approval; asset: Asset | null; deciding: boolean;
   onApprove: () => Promise<void>; onReject: (reason: string) => Promise<void>; onClose: () => void;
+  onFullscreen: (u: string) => void;
 }) {
   const [rejectReason, setRejectReason] = useState('')
   const [showReject, setShowReject] = useState(false)
@@ -147,7 +112,7 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding }
           </div>
 
           {(asset?.design_url || asset?.design_thumbnail_url) && (
-            <ImageViewer url={asset.design_url || asset.design_thumbnail_url} />
+            <ImageViewer url={asset.design_url || asset.design_thumbnail_url} onFullscreen={onFullscreen} />
           )}
 
           <div className="p-5 space-y-4">
@@ -226,6 +191,8 @@ export default function InboxPage() {
   const [selected, setSelected] = useState<{ approval: Approval; asset: Asset | null; plan: WeeklyPlan | null } | null>(null)
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
   const [bulkProgress, setBulkProgress] = useState('')
+  // Fullscreen image — rendered at PAGE level to escape overflow:auto clipping (iOS Safari bug)
+  const [fullscreenUrl, setFullscreenUrl] = useState<string | null>(null)
 
   const fetchProjects = useCallback(async () => {
     const res = await fetch(`${API}/projects`)
@@ -329,8 +296,24 @@ export default function InboxPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
+      {/* Page-level fullscreen — outside every overflow/scroll container */}
+      {fullscreenUrl && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setFullscreenUrl(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={resolveImgUrl(fullscreenUrl)} alt="Full size" style={{ maxWidth: '100vw', maxHeight: '100vh', objectFit: 'contain' }} />
+          <button
+            style={{ position: 'absolute', top: 16, right: 16, width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 24, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={e => { e.stopPropagation(); setFullscreenUrl(null) }}
+          >×</button>
+        </div>
+      )}
+
       {selected && (
         <DetailModal approval={selected.approval} asset={selected.asset}
+          onFullscreen={setFullscreenUrl}
           deciding={deciding === selected.approval.id}
           onApprove={() => approve(selected.approval.id)}
           onReject={(reason) => reject(selected.approval.id, reason)}
