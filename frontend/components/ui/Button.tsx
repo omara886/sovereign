@@ -1,28 +1,34 @@
-import React from 'react'
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
-type ButtonVariant = 'primary' | 'ghost' | 'danger' | 'approve' | 'reject'
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'approve' | 'reject'
+export type ButtonSize    = 'sm' | 'md' | 'lg'
 
-const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: 'bg-[#C9A84C] text-[#0A0A0A] hover:bg-[#E8C97A] font-semibold',
-  ghost: 'bg-[rgba(201,168,76,0.08)] text-[#C9A84C] border border-[rgba(201,168,76,0.2)] hover:bg-[rgba(201,168,76,0.15)]',
-  danger: 'bg-[rgba(239,68,68,0.1)] text-[#EF4444] border border-[rgba(239,68,68,0.2)] hover:bg-[rgba(239,68,68,0.2)]',
-  approve: 'bg-[rgba(16,185,129,0.1)] text-[#10B981] border border-[rgba(16,185,129,0.25)] hover:bg-[rgba(16,185,129,0.2)] font-semibold',
-  reject: 'bg-[rgba(239,68,68,0.1)] text-[#EF4444] border border-[rgba(239,68,68,0.25)] hover:bg-[rgba(239,68,68,0.2)] font-semibold',
+const VARIANT: Record<ButtonVariant, string> = {
+  primary:   'bg-[var(--color-accent)] text-[var(--color-on-accent)] hover:bg-[var(--color-accent-hover)] shadow-[var(--shadow-soft)]',
+  secondary: 'bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)]',
+  ghost:     'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]',
+  approve:   'bg-[var(--color-accent-soft)] text-[var(--color-success)] border border-[rgba(16,185,129,0.3)] hover:bg-[rgba(16,185,129,0.18)]',
+  reject:    'bg-[rgba(239,68,68,0.1)] text-[var(--color-error)] border border-[rgba(239,68,68,0.3)] hover:bg-[rgba(239,68,68,0.18)]',
 }
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+const SIZE: Record<ButtonSize, string> = {
+  sm: 'h-[var(--size-control-sm)] px-[var(--space-3)] text-[var(--font-size-body-sm)]',
+  md: 'h-[var(--size-control-md)] px-[var(--space-4)] text-[var(--font-size-body-sm)]',
+  lg: 'h-[var(--size-control-lg)] px-[var(--space-6)] text-[var(--font-size-body)]',
+}
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
-  children: React.ReactNode
+  size?: ButtonSize
+  children: ReactNode
 }
 
-export function Button({ children, variant = 'primary', className = '', ...props }: ButtonProps) {
+/** open-codesign Button pattern — token-based. */
+export function Button({ variant = 'primary', size = 'md', className = '', children, ...rest }: ButtonProps) {
   return (
     <button
-      {...props}
-      className={`inline-flex items-center justify-center gap-2 font-['Cairo'] text-sm px-4 py-2 rounded-xl transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed ${
-        VARIANT_CLASSES[variant]
-      } ${className}`}
-      style={{ transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)', ...props.style }}
+      className={`inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition-[var(--transition-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] disabled:opacity-50 disabled:pointer-events-none font-[var(--font-sans)] ${VARIANT[variant]} ${SIZE[size]} ${className}`}
+      {...rest}
     >
       {children}
     </button>

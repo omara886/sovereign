@@ -2,50 +2,144 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Google Fonts — loaded via next/font is preferred but CSS import works for MVP */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600;700&display=swap');
+/**
+ * Sovereign Design Tokens
+ * Based on open-codesign token system (packages/ui/src/tokens.css)
+ * Dark mode (warm dark, not cold blue-black) + Therapia gold accent
+ *
+ * Fonts: Fraunces Variable (display, per open-codesign) + Thmanyah (Arabic)
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Cairo:wght@400;600;700&display=swap');
 
 :root {
-  --obsidian: #0A0A0A;
-  --gold: #C9A84C;
-  --gold-light: #E8C97A;
-  --gold-dim: rgba(201, 168, 76, 0.15);
-  --slate: #1E293B;
-  --slate-light: #2D3F55;
-  --off-white: #F8F6F1;
-  --text-primary: #F8F6F1;
-  --text-secondary: rgba(248, 246, 241, 0.6);
-  --success: #10B981;
-  --warning: #F59E0B;
-  --danger: #EF4444;
+  /* ── Surface — warm dark (open-codesign dark mode pattern) ── */
+  --color-background:          oklch(0.15 0.012 50);   /* warm obsidian */
+  --color-background-secondary: oklch(0.19 0.014 50);
+  --color-surface:             oklch(0.20 0.014 50);   /* card bg */
+  --color-surface-hover:       oklch(0.24 0.016 50);
+  --color-surface-active:      oklch(0.27 0.018 50);
+  --color-surface-muted:       oklch(0.20 0.014 50);
+  --color-surface-elevated:    oklch(0.24 0.016 50);
+
+  /* ── Border ── */
+  --color-border:              oklch(0.28 0.010 50);
+  --color-border-muted:        oklch(0.25 0.010 50);
+  --color-border-subtle:       oklch(0.22 0.010 50);
+  --color-border-strong:       oklch(0.38 0.014 52);
+
+  /* ── Accent — Therapia gold (maps to open-codesign --color-accent) ── */
+  --color-accent:              oklch(0.74 0.13 75);    /* #C9A84C gold */
+  --color-accent-hover:        oklch(0.80 0.13 76);    /* #E8C97A lighter */
+  --color-accent-muted:        oklch(0.30 0.06 72);
+  --color-accent-soft:         oklch(0.74 0.13 75 / 0.12);
+  --color-accent-tint:         color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  --color-focus-ring:          oklch(0.74 0.13 75 / 0.35);
+  --color-on-accent:           oklch(0.15 0.012 50);   /* dark text on gold */
+
+  /* ── Text ── */
+  --color-text-primary:        oklch(0.95 0.010 70);   /* warm off-white */
+  --color-text-secondary:      oklch(0.70 0.015 60);
+  --color-text-muted:          oklch(0.52 0.012 58);
+
+  /* ── Semantic ── */
+  --color-success:             #10B981;
+  --color-warning:             #F59E0B;
+  --color-error:               #EF4444;
+  --color-overlay:             oklch(0 0 0 / 0.65);
+
+  /* ── Shadow — warm-tinted three depths (open-codesign pattern) ── */
+  --shadow-soft:               0 1px 2px oklch(0 0 0 / 0.35);
+  --shadow-card:               0 1px 2px oklch(0 0 0 / 0.30), 0 4px 16px oklch(0 0 0 / 0.40);
+  --shadow-elevated:           0 2px 4px oklch(0 0 0 / 0.35), 0 12px 32px oklch(0 0 0 / 0.55);
+  --shadow-inset-soft:         inset 0 0 0 1px var(--color-border-subtle);
+
+  /* ── Typography (open-codesign stack) ── */
+  --font-display: "Fraunces", "Times New Roman", serif;    /* headlines, hero */
+  --font-sans:    "Geist", system-ui, sans-serif;          /* UI body */
+  --font-arabic:  "Cairo", sans-serif;                     /* Arabic text */
+  --font-mono:    "Geist Mono", ui-monospace, monospace;   /* data/numbers */
+
+  /* ── Type scale (open-codesign values) ── */
+  --font-size-display-2xl: 48px;
+  --font-size-display-xl:  36px;
+  --font-size-display-lg:  28px;
+  --font-size-body-lg:     17px;
+  --font-size-body:        15px;
+  --font-size-body-sm:     13px;
+  --font-size-body-xs:     11px;
+
+  /* ── Spacing — strict 4px/8pt grid (open-codesign) ── */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+
+  /* ── Border radius (open-codesign scale) ── */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   14px;
+  --radius-2xl:  18px;
+  --radius-full: 9999px;
+
+  /* ── Control sizes ── */
+  --size-control-sm: 32px;
+  --size-control-md: 40px;
+  --size-control-lg: 48px;
+
+  /* ── Motion (open-codesign easing) ── */
+  --ease-out:       cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast:  120ms;
+  --duration-base:  200ms;
+  --duration-slow:  300ms;
+  --transition-base: all var(--duration-base) var(--ease-out);
+  --transition-fast: all var(--duration-fast) var(--ease-out);
 }
 
-body {
-  background: var(--obsidian);
-  color: var(--text-primary);
-  font-family: 'IBM Plex Sans', sans-serif;
+/* ── Base ── */
+html, body {
+  background:  var(--color-background);
+  color:       var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size:   var(--font-size-body);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-/* Arabic text class */
-.ar { font-family: 'Cairo', sans-serif; direction: rtl; }
+/* ── Arabic class ── */
+.ar {
+  font-family: var(--font-arabic);
+  direction:   rtl;
+}
 
-/* Prevent horizontal scroll */
-html, body { overflow-x: hidden; }
+/* ── Focus (open-codesign pattern) ── */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline:        2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius:  var(--radius-sm);
+}
 
-/* Mobile: content clears the fixed bottom tab bar + iPhone home indicator */
+/* ── Mobile: content clears fixed bottom tab ── */
 @media (max-width: 767px) {
   main { padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important; }
 }
 
-/* Bottom tab bar: sit above iPhone home indicator */
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-border-strong); }
+
+/* ── Bottom tab bar safe area ── */
 nav.mobile-tab-bar {
   padding-bottom: env(safe-area-inset-bottom);
   height: calc(60px + env(safe-area-inset-bottom));
 }
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(201, 168, 76, 0.2); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(201, 168, 76, 0.4); }
