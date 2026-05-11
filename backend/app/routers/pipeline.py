@@ -225,3 +225,12 @@ async def job_status(job_id: str):
     if not job:
         raise HTTPException(404, "Job not found")
     return job
+
+
+@router.get("/logs/{job_id}")
+async def get_job_logs(job_id: str):
+    """Full job details including any error messages."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "job not found")
+    return job
