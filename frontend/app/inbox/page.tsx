@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { FetchError } from '@/components/ui/FetchError'
 import { ProjectImage } from '@/components/ui/ProjectImage'
-import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, Eye } from 'lucide-react'
+import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, Eye, ImageOff } from "lucide-react"
 
 const FILTERS = ['All', 'Therapia', 'Qawwi', 'ProductBench', 'SahmAlgo']
 const CHANNEL_LABELS: Record<string, string> = {
@@ -27,47 +27,68 @@ const PROJECT_FILTERS: Record<string, string> = {
   SahmAlgo: 'sahmalgo',
 }
 
+function resolveImgUrl(url: string): string {
+  if (url.startsWith('data:')) return url
+  if (url.includes('sovereign-backend.railway.app'))
+    url = url.replace('sovereign-backend', 'backend-production-37a17')
+  if (url.startsWith('file://')) return ''
+  if (url.includes('railway.app') || url.includes('localhost'))
+    return `/api/img?url=${encodeURIComponent(url)}`
+  return url
+}
+
 function ImageViewer({ url }: { url: string | null | undefined }) {
   const [fullscreen, setFullscreen] = useState(false)
+  const [broken, setBroken] = useState(false)
   if (!url) return null
+  const src = resolveImgUrl(url)
+  if (!src) return null
+
   return (
     <>
-      {/* Fullscreen overlay */}
+      {/* Fullscreen — fixed overlay, highest z-index */}
       {fullscreen && (
         <div
-          className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4 cursor-zoom-out"
+          className="fixed inset-0 z-[999] bg-black flex items-center justify-center"
           onClick={() => setFullscreen(false)}
         >
-          <ProjectImage
-            url={url}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
             alt="Full design"
-            className="max-w-full max-h-full object-contain rounded-xl"
+            style={{ maxWidth: '100vw', maxHeight: '100vh', objectFit: 'contain' }}
+            onError={() => setBroken(true)}
           />
           <button
-            className="absolute top-4 right-4 text-white bg-[rgba(255,255,255,0.15)] rounded-full p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
-            onClick={() => setFullscreen(false)}
+            className="absolute top-4 right-4 text-white bg-[rgba(0,0,0,0.6)] rounded-full p-3 min-h-[48px] min-w-[48px] flex items-center justify-center text-2xl leading-none"
+            onClick={e => { e.stopPropagation(); setFullscreen(false) }}
           >
-            <X size={20} />
+            ×
           </button>
         </div>
       )}
-      {/* Preview with tap-to-expand */}
+
+      {/* Preview card — tap to fullscreen */}
       <div className="px-5 pt-5">
         <button
-          className="w-full relative group cursor-zoom-in"
+          type="button"
+          className="w-full block cursor-pointer"
           onClick={() => setFullscreen(true)}
-          title="Tap to view full size"
         >
-          <ProjectImage
-            url={url}
-            alt="Design preview"
-            className="w-full aspect-square rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)] object-cover"
-          />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-xl flex items-center justify-center">
-            <span className="opacity-0 group-hover:opacity-100 font-['IBM_Plex_Sans'] text-xs text-white bg-black/50 px-3 py-1.5 rounded-full transition-opacity">
-              Tap to expand
-            </span>
-          </div>
+          {broken ? (
+            <div className="w-full aspect-square rounded-xl bg-[#0A0A0A] flex items-center justify-center">
+              <ImageOff size={32} className="text-[rgba(248,246,241,0.1)]" />
+            </div>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={src}
+              alt="Design preview"
+              style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: 10 }}
+              onError={() => setBroken(true)}
+            />
+          )}
+          <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.35)] text-center mt-2">Tap to view full size</p>
         </button>
       </div>
     </>
