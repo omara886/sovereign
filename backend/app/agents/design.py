@@ -109,7 +109,7 @@ class DesignAgent(BaseAgent):
             f"Brand style: {brand_style}\nImage style: {image_style}\n"
             f"Brand colors: primary={primary}, accent={accent}\n"
             f"English copy: {copy_en[:200]}\nArabic copy: {copy_ar[:100]}\n\n"
-            "Generate the fal.ai visual prompt. Real scene, Saudi context, "
+            "Generate the fal.ai visual prompt. Mention: premium Arabic Thmanyah typeface Black weight headline, bold modern Saudi aesthetic. Real scene, Saudi context, "
             "brand accent color, depth, clear bottom 35% for text overlay."
         )
         try:

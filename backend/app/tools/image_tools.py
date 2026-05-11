@@ -1,7 +1,8 @@
 """
 Image tools — branded social media card generator.
-Uses Thmanyah font for both Arabic and English.
-Arabic text: reshaped + bidi for correct RTL rendering.
+Thmanyah typeface family — Black for headlines, Bold for subheads, Regular for body.
+Arabic text: reshaped + bidi for correct RTL connected-letter rendering.
+open-codesign spacing: 8pt grid, generous breathing room, warm dark background.
 """
 import asyncio
 from io import BytesIO
@@ -10,11 +11,31 @@ from textwrap import wrap
 
 from PIL import Image, ImageDraw, ImageFont
 
-# Font paths — bundled with the backend
-FONTS_DIR = Path(__file__).parent.parent.parent / "fonts"
-FONT_BOLD    = FONTS_DIR / "thmanyah-bold.otf"
-FONT_REGULAR = FONTS_DIR / "thmanyah-regular.otf"
-FONT_SERIF   = FONTS_DIR / "thmanyah-serif-bold.otf"
+# Thmanyah typeface — production font paths
+_ASSETS = Path(__file__).parent.parent.parent / "assets" / "fonts" / "thmanyah typeface"
+_SANS   = _ASSETS / "thmanyahsans" / "otf"
+_SERIF  = _ASSETS / "thmanyahserifdisplay" / "otf"
+
+# Weight hierarchy: Black=headline, Bold=subhead, Medium=label, Regular=body
+FONT_BLACK   = _SANS  / "thmanyahsans-Black.otf"
+FONT_BOLD    = _SANS  / "thmanyahsans-Bold.otf"
+FONT_MEDIUM  = _SANS  / "thmanyahsans-Medium.otf"
+FONT_REGULAR = _SANS  / "thmanyahsans-Regular.otf"
+FONT_SERIF_BOLD = _SERIF / "thmanyahserifdisplay-Bold.otf"
+
+# Fallback copies (legacy, kept for safety)
+_FONTS_LEGACY = Path(__file__).parent.parent.parent / "fonts"
+_FONT_BOLD_FB    = _FONTS_LEGACY / "thmanyah-bold.otf"
+_FONT_REGULAR_FB = _FONTS_LEGACY / "thmanyah-regular.otf"
+
+# Resolve with fallback
+def _resolve(primary: Path, fallback: Path) -> Path:
+    return primary if primary.exists() else fallback
+
+FONT_BLACK   = _resolve(FONT_BLACK,   _FONT_BOLD_FB)
+FONT_BOLD    = _resolve(FONT_BOLD,    _FONT_BOLD_FB)
+FONT_MEDIUM  = _resolve(FONT_MEDIUM,  _FONT_BOLD_FB)
+FONT_REGULAR = _resolve(FONT_REGULAR, _FONT_REGULAR_FB)
 
 
 def _reshape_arabic(text: str) -> str:
@@ -134,14 +155,15 @@ def _make_branded_image(
     center_x = width // 2
     text_max_w = width - pad * 2
 
-    # Font sizes scale with image dimensions
-    ar_size = max(36, width // 18)
-    en_size = max(24, width // 26)
-    label_size = max(16, width // 50)
+    # Thmanyah weight hierarchy + open-codesign type scale ratios
+    # display-2xl(48px) / body-lg(17px) = 2.8x — same ratio in image
+    ar_size    = max(44, width // 16)   # Black — headline, dominant
+    en_size    = max(24, width // 28)   # Regular — body, secondary
+    label_size = max(14, width // 55)   # Medium — label/watermark
 
-    font_ar    = _load_font(FONT_BOLD,    ar_size)
-    font_en    = _load_font(FONT_REGULAR, en_size)
-    font_label = _load_font(FONT_REGULAR, label_size)
+    font_ar    = _load_font(FONT_BLACK,   ar_size)    # Thmanyah Black — headlines
+    font_en    = _load_font(FONT_REGULAR, en_size)    # Thmanyah Regular — body
+    font_label = _load_font(FONT_MEDIUM,  label_size) # Thmanyah Medium — labels
 
     # Layout: start Arabic text at ~30% from top
     y = int(height * 0.28)
@@ -238,10 +260,11 @@ async def apply_text_overlay(
         text_max_w = w - pad * 2
 
         accent_rgb = (201, 168, 76)
-        ar_size = max(32, w // 20)
-        en_size = max(22, w // 28)
-        font_ar = _load_font(FONT_BOLD, ar_size)
-        font_en = _load_font(FONT_REGULAR, en_size)
+        # Thmanyah weight hierarchy on real fal.ai images
+        ar_size = max(38, w // 17)   # Black for Arabic headline
+        en_size = max(22, w // 30)   # Regular for English body
+        font_ar = _load_font(FONT_BLACK,   ar_size)   # Thmanyah Black — max impact
+        font_en = _load_font(FONT_REGULAR, en_size)   # Thmanyah Regular — clean body
 
         # Semi-transparent overlay at bottom 40% for text readability
         overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
