@@ -17,6 +17,7 @@ class ProjectMemoryBase(BaseModel):
     approved_examples: list = []
     rejected_examples: list = []
     performance_learnings: str | None = None
+    brand_brief: str | None = None
 
 
 class ProjectMemoryCreate(ProjectMemoryBase):
@@ -34,6 +35,7 @@ class ProjectMemoryUpdate(BaseModel):
     approved_examples: list | None = None
     rejected_examples: list | None = None
     performance_learnings: str | None = None
+    brand_brief: str | None = None
 
 
 class ProjectMemoryRead(ProjectMemoryBase, ORMBase):

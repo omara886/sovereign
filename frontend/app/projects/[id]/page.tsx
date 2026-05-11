@@ -85,6 +85,9 @@ export default function ProjectPage() {
   const [approvalMessage, setApprovalMessage] = useState('')
   const [analyticsAssets, setAnalyticsAssets] = useState<AnalyticsAsset[]>([])
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [brief, setBrief] = useState('')
+  const [briefSaving, setBriefSaving] = useState(false)
+  const [briefSaved, setBriefSaved] = useState(false)
   const [analyticsError, setAnalyticsError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const hasPlan = Boolean(currentPlan)
@@ -103,7 +106,11 @@ export default function ProjectPage() {
         fetch(`${API}/projects/${slug}/brand`),
       ])
       if (uRes.ok) { const d = await uRes.json(); setUploads(d.files || []) }
-      if (mRes.ok) setMemory(await mRes.json())
+      if (mRes.ok) {
+        const mem = await mRes.json()
+        setMemory(mem)
+        if (mem.brand_brief) setBrief(mem.brand_brief)
+      }
       if (bRes.ok) setBrand(await bRes.json())
     } catch { /* silent */ }
   }, [slug])
@@ -436,6 +443,53 @@ export default function ProjectPage() {
                     </div>
                   </div>
                 ) : <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.3)]">Loading...</p>}
+              </Card>
+            </AnimatedContent>
+
+            {/* Brand Brief — markdown text editor */}
+            <AnimatedContent delay={160}>
+              <Card>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-[#C9A84C]" />
+                    <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">Brand Brief</h2>
+                  </div>
+                  <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.3)]">Used in every design generation</p>
+                </div>
+                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-3">
+                  Write your brand story, visual direction, tone, and key messaging in plain text or Markdown. Agents read this before generating any content.
+                </p>
+                <textarea
+                  value={brief}
+                  onChange={e => { setBrief(e.target.value); setBriefSaved(false) }}
+                  rows={8}
+                  placeholder={`# Brand Brief\n\n## What we do\nTherapia is a mental wellness platform...\n\n## Visual direction\nNavy blue (#001A4D) primary, electric blue (#4169E1) accent...\n\n## Tone\nWarm, professional, never clinical...`}
+                  className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] focus:border-[rgba(201,168,76,0.4)] rounded-xl px-4 py-3 font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.8)] resize-none outline-none transition-colors leading-relaxed"
+                  dir="auto"
+                />
+                <div className="flex items-center justify-between mt-3">
+                  <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.25)]">{brief.length} chars</p>
+                  <button
+                    disabled={briefSaving}
+                    onClick={async () => {
+                      setBriefSaving(true)
+                      try {
+                        const r = await fetch(`${API}/projects/${slug}/memory`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ brand_brief: brief }),
+                        })
+                        if (r.ok) setBriefSaved(true)
+                      } finally {
+                        setBriefSaving(false)
+                      }
+                    }}
+                    className="flex items-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#0A0A0A] bg-[#C9A84C] hover:bg-[#E8C97A] px-4 py-2 rounded-xl min-h-[40px] disabled:opacity-40 transition-colors"
+                  >
+                    {briefSaving ? <Loader2 size={13} className="animate-spin" /> : briefSaved ? <Check size={13} /> : null}
+                    {briefSaving ? 'Saving...' : briefSaved ? 'Saved ✓' : 'Save Brief'}
+                  </button>
+                </div>
               </Card>
             </AnimatedContent>
           </div>

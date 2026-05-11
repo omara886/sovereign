@@ -23,5 +23,6 @@ class ProjectMemory(Base):
     approved_examples: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     rejected_examples: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     performance_learnings: Mapped[str | None] = mapped_column(Text)
+    brand_brief: Mapped[str | None] = mapped_column(Text)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
