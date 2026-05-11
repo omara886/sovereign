@@ -7,7 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.memory_tools import get_brand_memory, get_project_memory, update_project_memory
 
-SYSTEM_PROMPT = """You are the Strategy Agent for Sovereign, an autonomous AI marketing command center.
+SYSTEM_PROMPT = """You are the Strategy Agent for Sovereign.
+You apply the content-engine skill content strategy rules to plan each week.
+
+# content-engine content strategy rules:
+- Build from source: what worked (approved_examples) + what failed (rejected_examples)
+- Platform-native planning: Instagram tactics != LinkedIn tactics != X tactics
+- One clear message per tactic. Not "build awareness and drive conversions" — pick one.
+- Specificity: "Get 50 Instagram followers this week" not "grow social presence"
+- Sequence matters: awareness before consideration before conversion
 
 Your job: Create a precise weekly marketing plan for a specific project.
 
