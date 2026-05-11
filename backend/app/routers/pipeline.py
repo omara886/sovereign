@@ -8,8 +8,62 @@ from app.models.project import Project
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
-# Track running jobs in memory (good enough for single-user MVP)
+import time
+
+# Job store — keeps last 50 jobs with full step history for the Lab screen
 _jobs: dict[str, dict] = {}
+_JOB_HISTORY: list[dict] = []  # ordered list, newest first
+_MAX_HISTORY = 50
+_reports: dict[str, list] = {}  # job_id → list of reports
+
+
+def _new_job(job_id: str, project_id: str, project_name: str, mode: str) -> dict:
+    job = {
+        "id": job_id,
+        "project_id": project_id,
+        "project_name": project_name,
+        "mode": mode,
+        "status": "running",
+        "step": "Starting...",
+        "agent": "",
+        "data_sources": [],
+        "decisions": [],
+        "steps_history": [],
+        "started_at": time.time(),
+        "ended_at": None,
+        "error": None,
+    }
+    _jobs[job_id] = job
+    _JOB_HISTORY.insert(0, job)
+    if len(_JOB_HISTORY) > _MAX_HISTORY:
+        _JOB_HISTORY.pop()
+    return job
+
+
+def _log_step(job_id: str, step: str, agent: str = "", sources: list = None, decisions: list = None):
+    job = _jobs.get(job_id)
+    if not job:
+        return
+    entry = {
+        "ts": time.time(),
+        "step": step,
+        "agent": agent,
+        "data_sources": sources or [],
+        "decisions": decisions or [],
+    }
+    job["step"] = step
+    job["agent"] = agent
+    job["data_sources"] = sources or []
+    job["decisions"] = decisions or []
+    job["steps_history"].append(entry)
+
+
+def _finish_job(job_id: str, status: str, error: str = None):
+    job = _jobs.get(job_id)
+    if job:
+        job["status"] = status
+        job["ended_at"] = time.time()
+        job["error"] = error
 
 
 async def _run_plan(project_id: str, job_id: str):
@@ -17,7 +71,8 @@ async def _run_plan(project_id: str, job_id: str):
     from app.agents.strategy import StrategyAgent
     from app.models.weekly_plan import WeeklyPlan
 
-    _jobs[job_id] = {"status": "running", "step": "Strategy Agent thinking...", "project_id": project_id}
+    _new_job(job_id, project_id, "", "plan")
+    _log_step(job_id, "Strategy Agent thinking...", "Strategy Agent", ["ProjectMemory", "BrandMemory", "MetricHistory"])
     try:
         async with SessionLocal() as db:
             strategy = StrategyAgent()
@@ -36,17 +91,17 @@ async def _run_plan(project_id: str, job_id: str):
             db.add(plan)
             await db.commit()
             await db.refresh(plan)
-            _jobs[job_id] = {
-                "status": "done",
+            _finish_job(job_id, "done")
+            _jobs[job_id].update({
                 "step": "Weekly plan ready for approval",
                 "project_id": project_id,
                 "plan_id": str(plan.id),
                 "objective": plan.objective,
                 "tactics_count": len(plan.tactics),
                 "rationale": plan.rationale,
-            }
+            })
     except Exception as exc:
-        _jobs[job_id] = {"status": "error", "step": str(exc), "project_id": project_id}
+        _finish_job(job_id, "error", str(exc))
 
 
 async def _run_full_pipeline(project_id: str, job_id: str):
@@ -234,3 +289,51 @@ async def get_job_logs(job_id: str):
     if not job:
         raise HTTPException(404, "job not found")
     return job
+
+
+# ── Lab endpoints ────────────────────────────────────────────────────────────
+
+@router.get("/jobs")
+async def list_jobs():
+    """Lab: list recent pipeline runs with full step history."""
+    return [
+        {
+            "id": j["id"],
+            "project_name": j.get("project_name", ""),
+            "mode": j.get("mode", ""),
+            "status": j["status"],
+            "step": j["step"],
+            "steps_count": len(j.get("steps_history", [])),
+            "started_at": j.get("started_at"),
+            "ended_at": j.get("ended_at"),
+            "error": j.get("error"),
+        }
+        for j in _JOB_HISTORY
+    ]
+
+
+@router.get("/jobs/{job_id}/detail")
+async def job_detail(job_id: str):
+    """Lab: full step-by-step detail for a specific job."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "job not found")
+    return {**job, "reports": _reports.get(job_id, [])}
+
+
+@router.post("/jobs/{job_id}/report")
+async def report_step(job_id: str, payload: dict):
+    """Lab: report a problem with a specific step or the overall job."""
+    # payload: {step_index: int|None, issue: str, category: str}
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "job not found")
+    report = {
+        "ts": time.time(),
+        "step_index": payload.get("step_index"),
+        "step_name": payload.get("step_name", ""),
+        "issue": payload.get("issue", ""),
+        "category": payload.get("category", "other"),
+    }
+    _reports.setdefault(job_id, []).append(report)
+    return {"reported": True, "report": report}

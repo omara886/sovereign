@@ -2,7 +2,7 @@
 import { useLayoutEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BarChart3, CalendarDays, FolderKanban, Inbox, LayoutDashboard, LogOut, Settings } from 'lucide-react'
+import { BarChart3, CalendarDays, FolderKanban, Inbox, LayoutDashboard, LogOut, Settings, FlaskConical } from 'lucide-react'
 
 function getCurrentWeekMondayHref() {
   const now = new Date()
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: getCurrentWeekMondayHref(), icon: CalendarDays, label: 'Plans' },
   { href: '/inbox', icon: Inbox, label: 'Inbox' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/lab', icon: FlaskConical, label: 'Lab' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ]
 
