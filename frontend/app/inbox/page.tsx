@@ -111,8 +111,8 @@ function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding, 
             </button>
           </div>
 
-          {(asset?.design_url || asset?.design_thumbnail_url) && (
-            <ImageViewer url={asset.design_url || asset.design_thumbnail_url} onFullscreen={onFullscreen} />
+          {(asset?.design_thumbnail_url || asset?.design_url) && (
+            <ImageViewer url={asset.design_thumbnail_url || asset.design_url} onFullscreen={onFullscreen} />
           )}
 
           <div className="p-5 space-y-4">
