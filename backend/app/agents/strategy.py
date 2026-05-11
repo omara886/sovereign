@@ -129,14 +129,26 @@ class StrategyAgent(BaseAgent):
         }
 
     async def create_plan(self, db: AsyncSession, project_id: str, week_start: date, founder_notes: str | None = None) -> dict:
-        msg = f"Create weekly marketing plan for project_id={project_id}, week_start={week_start}."
+        # Pre-fetch memory so DeepSeek (no tool-use) gets context inline
+        project_mem = await self._get_project_memory(db, project_id)
+        brand_mem = await self._get_brand_memory(db, project_id)
+
+        msg = (
+            f"Create weekly marketing plan for week_start={week_start}.\n\n"
+            f"PROJECT MEMORY:\n{json.dumps(project_mem, default=str, ensure_ascii=False)}\n\n"
+            f"BRAND MEMORY:\n{json.dumps(brand_mem, default=str, ensure_ascii=False)}\n\n"
+            "Output ONLY the plan JSON. No explanation."
+        )
         if founder_notes:
             msg += f"\nFounder notes: {founder_notes}"
-        msg += "\nFirst call get_project_memory, then get_brand_memory, then output the plan JSON."
+
         result = await self.run(msg, db)
-        # Extract JSON from response
+        decoder = json.JSONDecoder()
         start = result.find("{")
-        end = result.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(result[start:end])
-        return {"error": "could not parse plan JSON", "raw": result}
+        if start >= 0:
+            try:
+                parsed, _ = decoder.raw_decode(result, start)
+                return parsed
+            except json.JSONDecodeError:
+                pass
+        return {"error": "could not parse plan JSON", "raw": result[:300]}

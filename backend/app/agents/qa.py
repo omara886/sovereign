@@ -117,15 +117,14 @@ class QAAgent(BaseAgent):
                 "checks": [{"check_name": "copy_validation", "status": "fail", "note": issue, "points_awarded": 0} for issue in issues],
                 "required_fixes": issues,
             }
+        brand_mem = await self._get_brand_memory(db, project_id)
         msg = (
-            f"QA check for project_id={project_id}. Channel: {channel}.\n"
-            f"Arabic copy:\n{copy_ar}\n\n"
-            f"English copy:\n{copy_en}\n\n"
-            f"Arabic CTA: {cta_ar}\n"
-            f"English CTA: {cta_en}\n"
-            f"Claim flags from copy agent: {claim_flags}\n\n"
-            "First call get_brand_memory, then score all 4 QA categories. "
-            "Return JSON with qa_score, qa_passed, checks array, required_fixes array."
+            f"QA check. Channel: {channel}.\n"
+            f"Arabic copy:\n{copy_ar}\n\nEnglish copy:\n{copy_en}\n"
+            f"Arabic CTA: {cta_ar}\nEnglish CTA: {cta_en}\n"
+            f"Claim flags: {claim_flags}\n\n"
+            f"BRAND MEMORY:\n{json.dumps(brand_mem, default=str, ensure_ascii=False)}\n\n"
+            "Score 4 QA categories. Return ONLY valid JSON with: qa_score (0-100), qa_passed (bool), checks array, required_fixes array."
         )
         result = await self.run(msg, db)
         start = result.find("{")

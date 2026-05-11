@@ -139,16 +139,23 @@ class CopyAgent(BaseAgent):
         funnel_stage: str,
         language: str = "bilingual",
     ) -> dict:
+        project_mem = await self._get_project_memory(db, project_id)
+        brand_mem = await self._get_brand_memory(db, project_id)
         msg = (
-            f"Generate {language} marketing copy for project_id={project_id}. "
-            f"Channel: {channel}. Asset type: {asset_type}. Funnel stage: {funnel_stage}. "
-            "First call get_project_memory, then get_brand_memory, then write the copy. "
-            "Use approved_examples as style reference and avoid rejected_examples exactly. "
-            "Return valid JSON with copy_ar, copy_en, cta_ar, cta_en, hashtags_ar, hashtags_en, variants, claim_flags."
+            f"Generate {language} marketing copy.\n"
+            f"Channel: {channel}. Asset type: {asset_type}. Funnel stage: {funnel_stage}.\n\n"
+            f"PROJECT MEMORY:\n{json.dumps(project_mem, default=str, ensure_ascii=False)}\n\n"
+            f"BRAND MEMORY:\n{json.dumps(brand_mem, default=str, ensure_ascii=False)}\n\n"
+            "Use approved_examples as style reference. Avoid rejected_examples exactly.\n"
+            "Return ONLY valid JSON with: copy_ar, copy_en, cta_ar, cta_en, hashtags_ar, hashtags_en, variants, claim_flags."
         )
         result = await self.run(msg, db)
+        decoder = json.JSONDecoder()
         start = result.find("{")
-        end = result.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(result[start:end])
-        return {"error": "could not parse copy JSON", "raw": result}
+        if start >= 0:
+            try:
+                parsed, _ = decoder.raw_decode(result, start)
+                return parsed
+            except json.JSONDecodeError:
+                pass
+        return {"error": "could not parse copy JSON", "raw": result[:300]}

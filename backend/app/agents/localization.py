@@ -107,17 +107,23 @@ class LocalizationAgent(BaseAgent):
         funnel_stage: str,
         target_language: str = "bilingual",
     ) -> dict:
+        project_mem = await self._get_project_memory(db, project_id)
+        brand_mem = await self._get_brand_memory(db, project_id)
         msg = (
-            f"Localize this copy for project_id={project_id}. "
-            f"Channel: {channel}. Funnel stage: {funnel_stage}. Target language: {target_language}.\n"
+            f"Localize this copy. Channel: {channel}. Funnel stage: {funnel_stage}. Language: {target_language}.\n"
             f"Source copy:\n{source_copy}\n\n"
-            "First call get_project_memory, then get_brand_memory. "
-            "Then write native Gulf Arabic and clear English versions. "
-            "Return JSON with copy_ar, copy_en, cta_ar, cta_en, hashtags_ar, hashtags_en."
+            f"PROJECT MEMORY:\n{json.dumps(project_mem, default=str, ensure_ascii=False)}\n\n"
+            f"BRAND MEMORY:\n{json.dumps(brand_mem, default=str, ensure_ascii=False)}\n\n"
+            "Write native Gulf Saudi Arabic (NOT Egyptian, NOT فصحى) and clear English.\n"
+            "Return ONLY valid JSON with: copy_ar, copy_en, cta_ar, cta_en, hashtags_ar, hashtags_en."
         )
         result = await self.run(msg, db)
+        decoder = json.JSONDecoder()
         start = result.find("{")
-        end = result.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(result[start:end])
-        return {"error": "parse failed", "raw": result}
+        if start >= 0:
+            try:
+                parsed, _ = decoder.raw_decode(result, start)
+                return parsed
+            except json.JSONDecodeError:
+                pass
+        return {"error": "parse failed", "raw": result[:300]}
