@@ -204,17 +204,21 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 design_data = await design_agent.generate_design(
                     db, project_id, str(asset.id), channel, copy_ar, copy_en, cta_ar, cta_en
                 )
+                from sqlalchemy.orm.attributes import flag_modified
                 asset.design_url           = design_data.get("design_url")
                 asset.design_thumbnail_url = design_data.get("thumbnail_url")
-                # Save both variants + memory snapshot so approval cockpit can show them
-                asset.variants             = design_data.get("variants", [])
-                asset.design_prompt        = json.dumps({
+                # Save both variants + memory snapshot
+                new_variants = list(design_data.get("variants", []))
+                asset.variants = new_variants
+                flag_modified(asset, "variants")  # force SQLAlchemy to detect JSONB change
+                asset.design_prompt = json.dumps({
                     "memory_snapshot": design_data.get("memory_snapshot", {}),
                     "model_used":      design_data.get("model_used", ""),
-                    "fal_prompt":      (design_data.get("variants") or [{}])[0].get("fal_prompt", ""),
+                    "fal_prompt":      (new_variants or [{}])[0].get("fal_prompt", "") if new_variants else "",
                 })
                 # Store CTAs in copy_bilingual for approval display
                 asset.copy_bilingual = {"cta_ar": cta_ar, "cta_en": cta_en}
+                flag_modified(asset, "copy_bilingual")
                 await db.commit()
 
                 log(f"QA check ({i+1}/{len(tactics)})...", "QA Agent", ["BrandMemory.donts", "ProjectMemory.excluded_topics", "RejectedExamples"], ["Gulf Arabic validated", "No forbidden phrases", "Score / 100"])
