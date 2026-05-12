@@ -1,13 +1,8 @@
 """
-Design Agent — Two variants per asset:
-  Variant A (FAL Option)         — cinematic Saudi lifestyle scene via fal.ai
-  Variant B (Open CoDesign)      — editorial typographic design using open-codesign principles
-
-Open CoDesign resources applied to Variant B:
-  - editorial-typography.jsx  → Arabic/English typographic hierarchy
-  - craft-polish.md           → spacing, contrast, edge treatment, rhythm
-  - frontend-design-anti-slop.md → no generic gradients, no default-card syndrome
-  - Brand refs: Linear, Notion, Stripe → clean, minimal, product-manager-grade
+Design Agent — Two commercial app-marketing variants per asset:
+  Variant A — product-in-use campaign (person using the app)
+  Variant B — outcome/results campaign (person after using the app)
+Both use commercial performance-marketing direction, not cinematic art.
 """
 import asyncio
 import json
@@ -20,41 +15,45 @@ from app.tools.image_tools import apply_text_overlay, create_thumbnail
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 from app.tools.r2_tools import upload_to_r2
 
-# ── Variant A: cinematic lifestyle art director ─────────────────────────────
+# ── Variant A: product-in-use app-marketing campaign ────────────────────────
 
-ART_DIRECTOR_PROMPT = """You are a world-class Saudi social media art director.
-15 years at BBDO and Wunderman Thompson Middle East.
-You create fal.ai image prompts for scroll-stopping Saudi social graphics.
+ART_DIRECTOR_PROMPT = """You are a senior commercial art director for Saudi/Gulf app-marketing campaigns.
+You produce fal.ai prompts that generate world-class commercial app-marketing assets.
 
-VISUAL RULES:
-- Real photographic scene always. NEVER text-on-solid-background.
-- Depth: foreground + midground + background with slight depth of field.
-- Bottom 35% of frame: clear, darker gradient — reserved for text overlay.
-- Brand accent color as the primary light source, rim light, or atmosphere.
-- Subjects never crowded — generous negative space, editorial airiness.
-- Saudi cultural context: modern professional Saudi lifestyle, Vision 2030 energy.
-- One visual message. 0.3 second emotional impact. Scale contrast.
+DIRECTION — commercial growth campaign, NOT cinematic art:
+- Saudi/Gulf professional actively using a phone or health app in real context
+- Clean performance-marketing layout: strong person + clear context + copy zone
+- Looks like a serious health-tech product launch campaign (think: Headspace, MyFitnessPal)
+- No abstract metaphors, no AI movie stills, no decorative wellness posters
+- Modern Saudi context: clean apartment, office, or urban lifestyle
+
+REQUIRED:
+- Real person with phone/app visible
+- Clear bottom 35% gradient zone for Arabic text overlay
+- Brand accent color as atmosphere, not decoration
+- Benefit visible in the scene (person engaged, measurable action)
 
 OUTPUT: fal.ai image prompt only. Max 120 words. No explanation. No quotes."""
 
 # ── Variant B: commercial marketing campaign director ──────────────────────
 
-COMMERCIAL_DIRECTOR_PROMPT = """You are a senior commercial advertising director for Saudi brands.
-Your work runs in malls, apps, Instagram ads, and LinkedIn campaigns.
-You create bold, conversion-driven campaign visuals that make people stop and act.
+COMMERCIAL_DIRECTOR_PROMPT = """You are a senior performance marketing creative director for Saudi/Gulf digital products.
+You create fal.ai prompts for app-install and conversion campaigns.
 
-COMMERCIAL MARKETING RULES:
-- Bold advertising composition — hero product, service benefit, or emotional outcome
-- Strong campaign energy: the image should feel like a SAR 50,000 ad shoot
-- Dramatic lighting, saturated but premium brand colors, high production value
-- Show the RESULT or BENEFIT visually — not the product itself, the transformation
-- Saudi commercial aesthetic: aspirational, modern, prosperous, aspirational Gulf
-- If health app: show confident healthy person, measurable goal achieved, doctor-trusted
-- If B2B SaaS: show leader using the tool, team succeeding, measurable business win
-- Strong visual tension: something is about to happen or just happened
-- Bottom 35% dark gradient clear for text
+DIRECTION — outcome/results campaign, distinct from Variant A which shows product-in-use:
+- Show a Saudi/Gulf person AFTER using the product: confident, healthier, more successful
+- Feature the transformation or result — not the app UI, the human outcome
+- Professional advertising photography: intentional lighting, clean environment, premium quality
+- Think: Nike Training Club campaign, Headspace results ad, health app success story — Gulf version
+- High-contrast composition: hero person + clean background + aspirational energy
 
-OUTPUT: fal.ai image prompt for commercial campaign visual. Max 120 words. No explanation. No quotes."""
+REQUIRED:
+- Different composition from Variant A (A = using app, B = result of using app)
+- Saudi Gulf person in aspirational but realistic setting
+- Bottom 35% clear and dark for Arabic copy overlay
+- No app screens, no phones — focus on the human transformation
+
+OUTPUT: fal.ai prompt only. Max 120 words. No explanation."""
 
 PLATFORM_DIMENSIONS = {
     "instagram_post":    (1080, 1080),
@@ -134,7 +133,7 @@ class DesignAgent(BaseAgent):
         except Exception:
             if variant == "A":
                 return (
-                    f"Cinematic {brand_style} Saudi scene, {image_style}, "
+                    f"Commercial app-marketing campaign, {brand_style} Saudi context, {image_style}, "
                     f"accent {accent} as rim light, background {background}, "
                     f"depth of field, clear bottom 35% for text, premium quality"
                 )
@@ -184,7 +183,7 @@ class DesignAgent(BaseAgent):
 
             colors    = (brand_mem.color_palette or {}) if brand_mem else {}
             style     = (brand_mem.visual_style  or "modern professional") if brand_mem else "modern professional"
-            img_style = (brand_mem.image_style   or "cinematic lifestyle photography") if brand_mem else "cinematic"
+            img_style = (brand_mem.image_style   or "commercial app-marketing photography") if brand_mem else "commercial app-marketing"
             dos       = (brand_mem.dos or []) if brand_mem else []
             accent    = colors.get("accent", colors.get("primary", "#4169E1"))
             primary_color = colors.get("primary", colors.get("background", "#001A4D"))
@@ -244,14 +243,14 @@ class DesignAgent(BaseAgent):
             variants = [
                 {
                     **variant_a_data,
-                    "label":       "FAL Option",
-                    "description": "Cinematic Saudi lifestyle scene — real photography, depth, cultural context",
-                    "source":      "fal-ai/flux/schnell + DeepSeek cinematic art director",
+                    "label":       "Campaign Variant A",
+                    "description": "Product-in-use: Saudi professional using the app, benefit visible, app context clear",
+                    "source":      "fal-ai/flux/schnell + DeepSeek commercial art director",
                 },
                 {
                     **variant_b_data,
-                    "label":       "Commercial Option",
-                    "description": "Bold campaign visual — high-production advertising, benefit-focused, conversion-grade",
+                    "label":       "Campaign Variant B",
+                    "description": "Result-focused: Saudi person after using Therapia, transformation visible, outcome clear",
                     "source":      "fal-ai/flux/schnell + DeepSeek commercial director",
                     "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
                 },
@@ -262,7 +261,7 @@ class DesignAgent(BaseAgent):
                 "thumbnail_url":   first_thumb,
                 "variants":        variants,
                 "memory_snapshot": memory_snapshot,
-                "model_used":      "fal-ai/flux/schnell + DeepSeek (A: cinematic, B: open-codesign editorial)",
+                "model_used":      "fal-ai/flux/schnell + DeepSeek (A: product-in-use, B: outcome campaign)",
                 "notes":           ["provisional" if (brand_mem and brand_mem.is_provisional) else "approved-brand"],
             }
         except Exception as exc:

@@ -535,6 +535,54 @@ async def asset_lineage(asset_id: str, db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.post("/regenerate-design/{asset_id}")
+async def regenerate_design(
+    asset_id: str, background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    """Regenerate 2 campaign variants for an existing asset (runs in background)."""
+    from uuid import UUID
+    from app.models.asset import Asset as AssetModel
+    try:
+        a_uuid = UUID(asset_id)
+    except ValueError:
+        raise HTTPException(400, "invalid asset_id")
+    asset = await db.get(AssetModel, a_uuid)
+    if not asset:
+        raise HTTPException(404, "asset not found")
+
+    async def _regen():
+        from app.database import SessionLocal
+        from app.agents.design import DesignAgent
+        from sqlalchemy.orm.attributes import flag_modified as _flag
+        async with SessionLocal() as session:
+            a = await session.get(AssetModel, a_uuid)
+            if not a:
+                return
+            agent = DesignAgent()
+            cb = a.copy_bilingual if isinstance(a.copy_bilingual, dict) else {}
+            design_data = await agent.generate_design(
+                session, str(a.project_id), str(a.id), a.channel,
+                a.copy_ar or '', a.copy_en or '',
+                cb.get('cta_ar', ''), cb.get('cta_en', ''),
+            )
+            new_variants = list(design_data.get('variants', []))
+            a.design_url           = design_data.get('design_url')
+            a.design_thumbnail_url = design_data.get('thumbnail_url')
+            a.variants             = new_variants
+            a.design_prompt        = json.dumps({
+                'memory_snapshot': design_data.get('memory_snapshot', {}),
+                'model_used':      design_data.get('model_used', ''),
+            })
+            _flag(a, 'variants')
+            _flag(a, 'design_prompt')
+            await session.commit()
+
+    background_tasks.add_task(_regen)
+    return {'status': 'regenerating', 'asset_id': asset_id,
+            'message': 'Generating 2 campaign variants — refresh inbox in ~60s'}
+
+
 @router.get("/board")
 async def pipeline_board(db: AsyncSession = Depends(get_db)):
     """Factory line board — all assets grouped by pipeline stage."""

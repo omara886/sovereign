@@ -284,10 +284,22 @@ function ApprovalCockpit({
                 />
               ))}
             </div>
-            {variants.length === 1 && (
-              <p className="text-xs text-amber-600 bg-amber-50 px-2 py-1.5 rounded mt-2">
-                Only 1 variant — pipeline will generate 2 options on next run
-              </p>
+            {variants.length <= 1 && asset?.id && (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                <p className="text-xs text-amber-700 flex-1">
+                  {variants.length === 0 ? 'No creative generated yet' : 'Only 1 variant — tap to generate 2 campaign options'}
+                </p>
+                <button
+                  onClick={async () => {
+                    await fetch(`/api/proxy/pipeline/regenerate-design/${asset.id}`, { method: 'POST' })
+                    setTimeout(() => window.location.reload(), 4000)
+                  }}
+                  className="text-xs font-semibold text-amber-700 border border-amber-300 px-2.5 py-1 rounded hover:bg-amber-100 transition-colors shrink-0 min-h-[32px]"
+                >
+                  Generate 2 Variants
+                </button>
+              </div>
             )}
           </div>
         )}
