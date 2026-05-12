@@ -204,25 +204,31 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 design_data = await design_agent.generate_design(
                     db, project_id, str(asset.id), channel, copy_ar, copy_en, cta_ar, cta_en
                 )
-                from sqlalchemy import update as sql_update
+                from sqlalchemy import text as sql_text
                 new_variants = list(design_data.get("variants", []))
                 mem_snap = design_data.get("memory_snapshot", {})
-                _log_step(job_id, f"DEBUG variants={len(new_variants)} design_err={design_data.get('error','none')[:50]}", "Pipeline")
-                # Direct SQL UPDATE for JSONB fields — ORM change detection unreliable for JSONB
-                await db.execute(
-                    sql_update(Asset).where(Asset.id == asset.id).values(
-                        design_url=design_data.get("design_url"),
-                        design_thumbnail_url=design_data.get("thumbnail_url"),
-                        variants=new_variants,
-                        design_prompt=json.dumps({
-                            "memory_snapshot": mem_snap,
-                            "model_used": design_data.get("model_used", ""),
-                            "fal_prompt": new_variants[0].get("fal_prompt", "") if new_variants else "",
-                        }),
-                        copy_bilingual={"cta_ar": cta_ar, "cta_en": cta_en},
-                    )
-                )
-                # Keep ORM object in sync
+                _log_step(job_id, f"DEBUG variants={len(new_variants)} err={design_data.get('error','none')[:30]}", "Pipeline")
+                # Raw SQL with explicit JSONB cast — most reliable for complex list data
+                await db.execute(sql_text("""
+                    UPDATE assets SET
+                        design_url           = :durl,
+                        design_thumbnail_url = :turl,
+                        variants             = :v::jsonb,
+                        design_prompt        = :dp,
+                        copy_bilingual       = :cb::jsonb
+                    WHERE id = :aid
+                """), {
+                    "durl": design_data.get("design_url"),
+                    "turl": design_data.get("thumbnail_url"),
+                    "v":    json.dumps(new_variants),
+                    "dp":   json.dumps({
+                        "memory_snapshot": mem_snap,
+                        "model_used": design_data.get("model_used", ""),
+                        "fal_prompt": new_variants[0].get("fal_prompt", "") if new_variants else "",
+                    }),
+                    "cb":   json.dumps({"cta_ar": cta_ar, "cta_en": cta_en}),
+                    "aid":  str(asset.id),
+                })
                 asset.design_url = design_data.get("design_url")
                 asset.design_thumbnail_url = design_data.get("thumbnail_url")
                 await db.commit()
