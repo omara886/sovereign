@@ -1,29 +1,58 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import AnimatedContent from '@/components/react-bits/AnimatedContent'
-import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
-import { FetchError } from '@/components/ui/FetchError'
-import { ProjectImage } from '@/components/ui/ProjectImage'
-import { Check, Inbox, RefreshCw, ThumbsUp, ThumbsDown, X, Eye, ImageOff } from "lucide-react"
+import {
+  CheckCircle, ChevronRight, Inbox, Loader2, RefreshCw,
+  ThumbsDown, ThumbsUp, ImageOff, AlertTriangle, CheckCheck
+} from 'lucide-react'
+
+const API = '/api/proxy'
+
+const PROJECT_COLORS: Record<string, string> = {
+  therapia:     '#4C1D95',
+  qawwi:        '#1D4ED8',
+  productbench: '#0F766E',
+  sahmalgo:     '#B45309',
+}
 
 const CHANNEL_LABELS: Record<string, string> = {
   instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X / Twitter', google_ads: 'Google Ads'
 }
-const API = '/api/proxy'
 
-interface Approval { id: string; asset_id: string | null; weekly_plan_id: string | null; decision: string | null; created_at: string }
-interface Asset { id: string; project_id: string; type: string; channel: string; language: string; copy_ar: string | null; copy_en: string | null; design_thumbnail_url: string | null; design_url: string | null; qa_score: number | null; status: string }
-interface WeeklyPlan { id: string; objective: string; funnel_focus: string; rationale: string; tactics: unknown[]; status: string; total_budget_estimate: number }
+const FUNNEL_LABELS: Record<string, string> = {
+  awareness: 'Awareness', consideration: 'Consideration',
+  conversion: 'Conversion', retention: 'Retention',
+}
+
+interface Approval {
+  id: string
+  asset_id: string | null
+  weekly_plan_id: string | null
+  decision: string | null
+  created_at: string
+}
+interface Asset {
+  id: string
+  project_id: string
+  type: string
+  channel: string
+  language: string
+  copy_ar: string | null
+  copy_en: string | null
+  cta_ar: string | null
+  cta_en: string | null
+  design_thumbnail_url: string | null
+  design_url: string | null
+  qa_score: number | null
+  qa_notes: unknown[] | null
+  status: string
+}
 interface Project { id: string; slug: string; name: string }
-interface PublishJob { id: string; asset_id: string; approval_id: string; channel: string; scheduled_at: string; published_at: string | null; platform_post_id: string | null; status: string; error_message: string | null }
 
 function resolveImgUrl(url: string): string {
   if (!url) return ''
   if (url.startsWith('data:')) return url
   if (url.startsWith('file://')) return ''
-  // Bogus R2 placeholder URL — proxy via /api/img which fetches from real R2
   if (url.includes('...r2.dev/')) return `/api/img?url=${encodeURIComponent(url)}`
   if (url.includes('sovereign-backend.railway.app'))
     url = url.replace('sovereign-backend', 'backend-production-37a17')
@@ -32,458 +61,391 @@ function resolveImgUrl(url: string): string {
   return url
 }
 
-function ImageViewer({ url, onFullscreen }: { url: string | null | undefined; onFullscreen: (u: string) => void }) {
+function QABadge({ label, passed }: { label: string; passed: boolean | null }) {
+  if (passed === null) return null
+  return (
+    <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md ${passed ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+      {passed ? <CheckCheck size={11} /> : <AlertTriangle size={11} />}
+      {label}
+    </div>
+  )
+}
+
+function AssetPreview({ url }: { url: string | null }) {
   const [broken, setBroken] = useState(false)
-  if (!url) return null
-  const src = resolveImgUrl(url)
-  if (!src) return null
+  const src = url ? resolveImgUrl(url) : ''
+
+  if (!src || broken) {
+    return (
+      <div className="w-full aspect-square bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center">
+        <ImageOff size={32} className="text-gray-300" />
+      </div>
+    )
+  }
+
   return (
-    <div className="px-5 pt-5">
-      <button type="button" style={{ width: '100%', display: 'block', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => onFullscreen(url)}>
-        {broken ? (
-          <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10, background: '#0A0A0A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ImageOff size={32} style={{ color: 'rgba(248,246,241,0.1)' }} />
-          </div>
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: 10, display: 'block' }} onError={() => setBroken(true)} />
-        )}
-        <p style={{ fontSize: 11, color: 'rgba(248,246,241,0.35)', textAlign: 'center', marginTop: 8 }}>Tap image to view full size</p>
-      </button>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className="w-full aspect-square object-cover rounded-xl border border-gray-200"
+      onError={() => setBroken(true)}
+    />
   )
 }
 
-function PlanSummary({ planId }: { planId: string }) {
-  const [plan, setPlan] = useState<WeeklyPlan | null>(null)
-  useEffect(() => {
-    fetch(`${API}/plans/${planId}`).then(r => r.ok ? r.json() : null).then(d => d && setPlan(d))
-  }, [planId])
-  if (!plan) return <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)]">Loading plan...</p>
-  return (
-    <div className="space-y-3">
-      <div>
-        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-1 uppercase tracking-wider">Weekly Plan</p>
-        <p className="font-['Cormorant_Garamond'] text-lg text-[#F8F6F1]">{plan.objective}</p>
-      </div>
-      <div className="flex gap-2 flex-wrap">
-        <Badge variant="gold">{plan.funnel_focus}</Badge>
-        <Badge variant="default">{Array.isArray(plan.tactics) ? plan.tactics.length : 0} tactics</Badge>
-        <Badge variant="default">SAR {Number(plan.total_budget_estimate||0).toLocaleString('en-US')}</Badge>
-      </div>
-      {plan.rationale && <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.6)] leading-relaxed">{plan.rationale}</p>}
-      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.35)]">Approve this plan to start generating content automatically.</p>
-    </div>
-  )
-}
-
-function DetailModal({ approval, asset, onApprove, onReject, onClose, deciding, onFullscreen }: {
-  approval: Approval; asset: Asset | null; deciding: boolean;
-  onApprove: () => Promise<void>; onReject: (reason: string) => Promise<void>; onClose: () => void;
-  onFullscreen: (u: string) => void;
+function ApprovalCockpit({
+  asset,
+  project,
+  onApprove,
+  onReject,
+  deciding,
+}: {
+  approval?: Approval
+  asset: Asset | null
+  project: Project | null
+  onApprove: () => Promise<void>
+  onReject: (reason: string) => Promise<void>
+  deciding: boolean
 }) {
-  const [rejectReason, setRejectReason] = useState('')
   const [showReject, setShowReject] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+
+  const projColor = project ? (PROJECT_COLORS[project.slug] ?? '#6B7280') : '#6B7280'
+  const qaScore = asset?.qa_score
+  const qaChecks = (asset?.qa_notes as Array<{ check_name: string; status: string; note?: string }> | null) ?? []
+  const arabicQA = qaChecks.find(c => c.check_name === 'arabic_script_qa')
+  const brandQA = qaChecks.find(c => c.check_name === 'tone_match' || c.check_name === 'copy_validation')
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[20px] p-[2px] border border-[rgba(255,255,255,0.06)]" style={{
-        background: 'linear-gradient(135deg, rgba(201,168,76,0.14), rgba(10,10,10,0.2) 55%, transparent)',
-      }}>
-        <div className="rounded-[18px] bg-[#1E293B]">
-          <div className="flex items-center justify-between p-5 border-b border-[rgba(255,255,255,0.06)]">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">
-                {asset ? CHANNEL_LABELS[asset.channel] || asset.channel : 'Plan'}
-              </span>
-              {asset?.type && <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">{asset.type}</span>}
-              {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
-              <span className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.35)]">#{approval.id.slice(0, 8)}</span>
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-card">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
+        <div className="w-3 h-3 rounded-full shrink-0" style={{ background: projColor }} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900">{project?.name ?? 'Unknown'}</p>
+          <p className="text-xs text-gray-500">{CHANNEL_LABELS[asset?.channel ?? ''] ?? asset?.channel} · {FUNNEL_LABELS[asset?.type ?? ''] ?? asset?.type}</p>
+        </div>
+        {qaScore != null && (
+          <div className={`text-xs font-mono font-semibold px-2 py-1 rounded-md ${qaScore >= 70 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+            QA {qaScore}
+          </div>
+        )}
+      </div>
+
+      <div className="p-5 space-y-5">
+        {/* Creative preview */}
+        <AssetPreview url={asset?.design_thumbnail_url ?? asset?.design_url ?? null} />
+
+        {/* Copy */}
+        {asset?.copy_ar && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Arabic Copy</p>
+            <p dir="rtl" className="font-arabic text-sm text-gray-900 leading-relaxed bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
+              {asset.copy_ar}
+            </p>
+            {asset.cta_ar && (
+              <p dir="rtl" className="font-arabic text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 mt-1 w-fit mr-auto">
+                CTA: {asset.cta_ar}
+              </p>
+            )}
+          </div>
+        )}
+        {asset?.copy_en && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">English Copy</p>
+            <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">{asset.copy_en}</p>
+            {asset.cta_en && (
+              <p className="text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 mt-1 w-fit">
+                CTA: {asset.cta_en}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* QA results */}
+        {qaChecks.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">QA Results</p>
+            <div className="flex flex-wrap gap-2">
+              <QABadge label="Arabic Script" passed={arabicQA ? arabicQA.status === 'pass' : null} />
+              <QABadge label="Brand Voice" passed={brandQA ? brandQA.status === 'pass' : null} />
+              {qaScore != null && <QABadge label={`Score ${qaScore}/100`} passed={qaScore >= 70} />}
             </div>
-            <button onClick={onClose} className="text-[rgba(248,246,241,0.4)] hover:text-[#F8F6F1] p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
-              <X size={18} />
+            {qaChecks.filter(c => c.status === 'fail').map((c, i) => (
+              <p key={i} className="text-xs text-red-600 bg-red-50 rounded px-2 py-1">{c.note || c.check_name}</p>
+            ))}
+          </div>
+        )}
+
+        {/* Reject reason input */}
+        {showReject && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-500">
+              Rejection reason — becomes a negative memory example for the AI
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+              placeholder="What went wrong? e.g. Wrong tone, too clinical, CTA doesn't match brand voice..."
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-indigo-400 text-gray-800 placeholder:text-gray-400"
+            />
+          </div>
+        )}
+
+        {/* Actions */}
+        {!showReject ? (
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => onApprove()}
+              disabled={deciding}
+              className="flex-1 flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg py-2.5 min-h-[44px] disabled:opacity-40 transition-colors"
+            >
+              {deciding ? <Loader2 size={14} className="animate-spin" /> : <ThumbsUp size={14} />}
+              Approve
+            </button>
+            <button
+              onClick={() => setShowReject(true)}
+              disabled={deciding}
+              className="flex-1 flex items-center justify-center gap-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg py-2.5 min-h-[44px] disabled:opacity-40 hover:bg-gray-50 transition-colors"
+            >
+              <ThumbsDown size={14} /> Reject
             </button>
           </div>
-
-          {(asset?.design_thumbnail_url || asset?.design_url) && (
-            <ImageViewer url={asset.design_thumbnail_url || asset.design_url} onFullscreen={onFullscreen} />
-          )}
-
-          <div className="p-5 space-y-4">
-            {asset?.copy_en && (
-              <div>
-                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-2 uppercase tracking-wider">English Copy</p>
-                <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] leading-relaxed whitespace-pre-wrap">{asset.copy_en}</p>
-              </div>
-            )}
-            {asset?.copy_ar && (
-              <div>
-                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-2 uppercase tracking-wider">Arabic Copy</p>
-                <p className="font-['Cairo'] text-sm text-[#F8F6F1] leading-relaxed" dir="rtl">{asset.copy_ar}</p>
-              </div>
-            )}
-            {/* Plan approval — show plan details */}
-            {!asset && approval.weekly_plan_id && (
-              <PlanSummary planId={approval.weekly_plan_id} />
-            )}
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowReject(false); setRejectReason('') }}
+              className="flex-none px-4 border border-gray-200 text-gray-600 text-sm rounded-lg py-2.5 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onReject(rejectReason)}
+              disabled={deciding}
+              className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg py-2.5 disabled:opacity-40 transition-colors"
+            >
+              {deciding ? <Loader2 size={14} className="animate-spin" /> : <ThumbsDown size={14} />}
+              Confirm Reject
+            </button>
           </div>
-
-          {showReject && (
-            <div className="px-5 pb-2">
-              <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-2">
-                Why are you rejecting? The AI learns from this.
-              </p>
-              <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)}
-                placeholder="e.g. Wrong tone, mentions psychological content, off-brand..."
-                rows={3}
-                className="w-full bg-[#0A0A0A] border border-[rgba(255,255,255,0.1)] rounded-xl px-4 py-3 font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] outline-none focus:border-[#C9A84C] resize-none transition-colors"
-              />
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2 p-5 pt-3 sm:flex-row">
-            {!showReject ? (
-              <>
-                <button onClick={async () => { setSubmitting(true); await onApprove(); setSubmitting(false); onClose() }} disabled={deciding || submitting}
-                  className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-base font-semibold text-[#10B981] bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(16,185,129,0.2)] transition-all disabled:opacity-40">
-                  <ThumbsUp size={15} /> Approve
-                </button>
-                <button onClick={() => setShowReject(true)}
-                  className="w-full sm:flex-1 flex items-center justify-center gap-2 font-['IBM_Plex_Sans'] text-base font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[56px] hover:bg-[rgba(239,68,68,0.2)] transition-all">
-                  <ThumbsDown size={15} /> Reject
-                </button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => setShowReject(false)}
-                  className="w-full sm:flex-1 font-['IBM_Plex_Sans'] text-base text-[rgba(248,246,241,0.5)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 min-h-[56px]">
-                  Back
-                </button>
-                <button onClick={async () => { setSubmitting(true); await onReject(rejectReason || ''); setSubmitting(false); onClose() }} disabled={submitting}
-                  className="w-full sm:flex-1 font-['IBM_Plex_Sans'] text-base font-semibold text-[#EF4444] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] rounded-xl py-3 min-h-[56px] disabled:opacity-40 hover:bg-[rgba(239,68,68,0.2)] transition-all">
-                  {submitting ? 'Saving...' : rejectReason ? 'Reject & Save Feedback' : 'Reject'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   )
 }
 
 export default function InboxPage() {
-  const [filter, setFilter] = useState('All')
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [assets, setAssets] = useState<Record<string, Asset>>({})
-  const [plans, setPlans] = useState<Record<string, WeeklyPlan>>({})
   const [projects, setProjects] = useState<Project[]>([])
-  const [publishedJobs, setPublishedJobs] = useState<PublishJob[]>([])
   const [loading, setLoading] = useState(true)
   const [deciding, setDeciding] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [selected, setSelected] = useState<{ approval: Approval; asset: Asset | null; plan: WeeklyPlan | null } | null>(null)
-  const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
-  const [bulkProgress, setBulkProgress] = useState('')
-  // Fullscreen image — rendered at PAGE level to escape overflow:auto clipping (iOS Safari bug)
-  const [fullscreenUrl, setFullscreenUrl] = useState<string | null>(null)
-
-  const fetchProjects = useCallback(async () => {
-    const res = await fetch(`${API}/projects`)
-    if (res.ok) setProjects(await res.json())
-  }, [])
-
-  const fetchApprovals = useCallback(async () => {
-    setLoading(true); setError('')
-    try {
-      const res = await fetch(`${API}/approvals?status=pending`)
-      if (!res.ok) throw new Error()
-      const data: Approval[] = await res.json()
-      setApprovals(data)
-      const assetMap: Record<string, Asset> = {}
-      const planMap: Record<string, WeeklyPlan> = {}
-      await Promise.all(data.map(async a => {
-        if (a.asset_id) {
-          const ar = await fetch(`${API}/assets/${a.asset_id}`)
-          if (ar.ok) assetMap[a.asset_id] = await ar.json()
-        }
-        if (a.weekly_plan_id) {
-          const pr = await fetch(`${API}/plans/${a.weekly_plan_id}`)
-          if (pr.ok) planMap[a.weekly_plan_id] = await pr.json()
-        }
-      }))
-      setAssets(assetMap)
-      setPlans(planMap)
-      await fetchProjects()
-    } catch { setError('Could not connect to backend.') }
-    finally { setLoading(false) }
-  }, [fetchProjects])
-
-  const loadPublishJobs = useCallback(async () => {
-    const project = filter === 'All' ? null : projects.find(p => p.slug === filter)
-    const url = project ? `${API}/publish-jobs?project_id=${project.id}` : `${API}/publish-jobs`
-    const res = await fetch(url)
-    if (res.ok) setPublishedJobs(await res.json())
-  }, [filter, projects])
-
-  useEffect(() => { void fetchApprovals() }, [fetchApprovals])
-  useEffect(() => { void loadPublishJobs() }, [loadPublishJobs])
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      void loadPublishJobs()
-    }, 30000)
-    return () => window.clearInterval(interval)
-  }, [loadPublishJobs])
+  const [toast, setToast] = useState<string | null>(null)
+  const [filterSlug, setFilterSlug] = useState('all')
+  const [activeIndex, setActiveIndex] = useState(0)
 
   useEffect(() => {
     if (!toast) return
-    const timeout = window.setTimeout(() => setToast(null), 3000)
-    return () => window.clearTimeout(timeout)
+    const t = setTimeout(() => setToast(null), 3000)
+    return () => clearTimeout(t)
   }, [toast])
 
-  const decideApproval = useCallback(async (approvalId: string, decision: 'approved' | 'rejected', reason?: string | null) => {
-    setDeciding(approvalId)
-    const res = await fetch(`${API}/approvals/${approvalId}/decide`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision, reason: reason || null }),
-    })
-    setDeciding(null); setSelected(null)
-    await fetchApprovals()
-    await loadPublishJobs()
-    return res.ok
-  }, [fetchApprovals, loadPublishJobs])
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [appRes, projRes] = await Promise.all([
+        fetch(`${API}/approvals?status=pending`),
+        fetch(`${API}/projects`),
+      ])
+      if (projRes.ok) setProjects(await projRes.json())
+      if (!appRes.ok) throw new Error(`HTTP ${appRes.status}`)
+      const data: Approval[] = await appRes.json()
+      setApprovals(data)
 
-  const approve = async (approvalId: string) => {
-    const ok = await decideApproval(approvalId, 'approved')
-    if (ok) setToast({ msg: '✅ Approved — scheduled for publish', color: 'success' })
-  }
-
-  const reject = async (approvalId: string, reason: string) => {
-    const ok = await decideApproval(approvalId, 'rejected', reason || null)
-    if (ok) setToast({ msg: 'Feedback saved — the AI will avoid this pattern next time', color: 'success' })
-  }
-
-  const approveAll = async () => {
-    if (pending.length <= 1) return
-    setBulkProgress(`Approving 0/${pending.length}...`)
-    for (let i = 0; i < pending.length; i += 1) {
-      setBulkProgress(`Approving ${i + 1}/${pending.length}...`)
-      await decideApproval(pending[i].id, 'approved')
+      const assetMap: Record<string, Asset> = {}
+      await Promise.all(data.map(async a => {
+        if (a.asset_id) {
+          const r = await fetch(`${API}/assets/${a.asset_id}`)
+          if (r.ok) assetMap[a.asset_id] = await r.json()
+        }
+      }))
+      setAssets(assetMap)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not load inbox')
+    } finally {
+      setLoading(false)
     }
-    setBulkProgress('')
-    setToast({ msg: `All ${pending.length} assets approved and scheduled`, color: 'success' })
+  }, [])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const decide = async (approvalId: string, decision: 'approved' | 'rejected', reason?: string) => {
+    setDeciding(approvalId)
+    try {
+      await fetch(`${API}/approvals/${approvalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, rejection_reason: reason ?? null }),
+      })
+      setToast(decision === 'approved' ? 'Approved — scheduled for publishing' : 'Rejected — saved as negative example')
+      setApprovals(prev => prev.filter(a => a.id !== approvalId))
+      setActiveIndex(i => Math.max(0, i - 1))
+    } finally {
+      setDeciding(null)
+    }
   }
 
-  const pending = approvals.filter(a => a.decision == null)
-  const hasPublished = publishedJobs.length > 0
-  const activePublishedJobs = useMemo(() => {
-    if (filter === 'All') return publishedJobs
-    const project = projects.find(p => p.slug === filter)
-    if (!project) return publishedJobs
-    return publishedJobs.filter(job => {
-      const asset = assets[job.asset_id]
-      return asset ? asset.project_id === project.id : true
-    })
-  }, [assets, filter, projects, publishedJobs])
+  const projectMap = useMemo(() => {
+    const m = new Map<string, Project>()
+    projects.forEach(p => m.set(p.id, p))
+    return m
+  }, [projects])
+
+  const pending = useMemo(() => {
+    const filtered = filterSlug === 'all'
+      ? approvals.filter(a => a.decision == null)
+      : approvals.filter(a => {
+        if (a.decision != null) return false
+        const asset = a.asset_id ? assets[a.asset_id] : null
+        if (!asset) return true
+        const proj = projectMap.get(asset.project_id)
+        return proj?.slug === filterSlug
+      })
+    return filtered
+  }, [approvals, assets, projectMap, filterSlug])
+
+  const current = pending[activeIndex] ?? null
+  const currentAsset = current?.asset_id ? assets[current.asset_id] ?? null : null
+  const currentProject = currentAsset ? projectMap.get(currentAsset.project_id) ?? null : null
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]">
-      {/* Page-level fullscreen — outside every overflow/scroll container */}
-      {fullscreenUrl && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setFullscreenUrl(null)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={resolveImgUrl(fullscreenUrl)} alt="Full size" style={{ maxWidth: '100vw', maxHeight: '100vh', objectFit: 'contain' }} />
-          <button
-            style={{ position: 'absolute', top: 16, right: 16, width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 24, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onClick={e => { e.stopPropagation(); setFullscreenUrl(null) }}
-          >×</button>
+    <div className="min-h-screen bg-[#FAFAFA]">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-elevated flex items-center gap-2">
+          <CheckCircle size={14} className="text-emerald-400" />
+          {toast}
         </div>
       )}
 
-      {selected && (
-        <DetailModal approval={selected.approval} asset={selected.asset}
-          onFullscreen={setFullscreenUrl}
-          deciding={deciding === selected.approval.id}
-          onApprove={() => approve(selected.approval.id)}
-          onReject={(reason) => reject(selected.approval.id, reason)}
-          onClose={() => { setSelected(null); fetchApprovals() }} />
-      )}
-
-      <div className="pt-12 pb-6 px-4 md:px-8 border-b border-[rgba(201,168,76,0.1)]">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Inbox size={22} className="text-[#C9A84C]" />
-            <h1 className="font-['Cormorant_Garamond'] text-3xl text-[#F8F6F1]">Approval Inbox</h1>
-            <span className="font-['IBM_Plex_Mono'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.12)] border border-[rgba(201,168,76,0.2)] px-2.5 py-0.5 rounded-full">{pending.length}</span>
+            <Inbox size={18} className="text-gray-500" />
+            <h1 className="text-base font-semibold text-gray-900">Approval Inbox</h1>
+            {pending.length > 0 && (
+              <span className="bg-indigo-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                {pending.length}
+              </span>
+            )}
           </div>
-          <button onClick={fetchApprovals} className="text-[rgba(248,246,241,0.4)] hover:text-[#C9A84C] p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
-            <RefreshCw size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Filter tabs */}
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setFilterSlug('all')}
+                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${filterSlug === 'all' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600'}`}
+              >
+                All
+              </button>
+              {projects.map(p => (
+                <button
+                  key={p.slug}
+                  onClick={() => setFilterSlug(p.slug)}
+                  className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${filterSlug === p.slug ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600'}`}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <button onClick={fetchAll} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors">
+              <RefreshCw size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 md:px-8 pt-5 pb-[7rem]">
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-5">
-          {(['All', ...projects.map(p => p.slug)] as string[]).map(f => {
-            const label = f === 'All' ? 'All' : (projects.find(p => p.slug === f)?.name ?? f)
-            return (
-              <button key={f} onClick={() => setFilter(f)}
-                className={`shrink-0 font-['IBM_Plex_Sans'] text-sm px-4 py-2.5 rounded-full border transition-all min-h-[44px] ${filter === f ? 'bg-[rgba(201,168,76,0.15)] border-[rgba(201,168,76,0.4)] text-[#C9A84C]' : 'border-[rgba(255,255,255,0.08)] text-[rgba(248,246,241,0.5)]'}`}>{label}</button>
-            )
-          })}
-        </div>
-
-        {!loading && !error && pending.length > 1 && (
-          <AnimatedContent delay={40}>
-            <button
-              onClick={() => void approveAll()}
-              disabled={!!bulkProgress || deciding !== null}
-              className="w-full flex items-center justify-center gap-2 mb-4 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#0A0A0A] bg-[#C9A84C] hover:bg-[#E8C97A] rounded-xl py-3 min-h-[48px] transition-all disabled:opacity-40"
-            >
-              {bulkProgress || `Approve All (${pending.length})`}
-            </button>
-          </AnimatedContent>
-        )}
-
-        {toast && (
-          <AnimatedContent delay={0}>
-            <Card className={`mb-4 ${toast.color === 'success' ? 'border-[rgba(16,185,129,0.25)]' : ''}`}>
-              <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1]">{toast.msg}</p>
-            </Card>
-          </AnimatedContent>
-        )}
-
-        {error && <FetchError message={error} onRetry={fetchApprovals} />}
-        {loading && !error && <Card><p className="font-['IBM_Plex_Sans'] text-center text-[rgba(248,246,241,0.4)] py-12 text-sm">Loading...</p></Card>}
-
-        {!loading && !error && pending.length === 0 && !hasPublished && (
-          <AnimatedContent delay={100}>
-            <Card>
-              <div className="flex flex-col items-center py-16 gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.2)] flex items-center justify-center">
-                  <Check size={32} className="text-[#10B981]" />
-                </div>
-                <h2 className="font-['IBM_Plex_Sans'] text-lg text-[#F8F6F1] font-semibold">All caught up</h2>
-                <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)] text-center max-w-xs">
-                  No pending approvals. Run the pipeline on a project to generate content.
-                </p>
-                <Link href="/projects/therapia" className="mt-3 inline-flex items-center font-['IBM_Plex_Sans'] text-sm text-[#C9A84C] border border-[rgba(201,168,76,0.3)] rounded-xl px-4 py-2 min-h-[44px] hover:bg-[rgba(201,168,76,0.08)] transition-all">
-                  Run pipeline on Therapia →
-                </Link>
-              </div>
-            </Card>
-          </AnimatedContent>
-        )}
-
-        {!loading && !error && pending.length > 0 && (
-          <div className="space-y-3 pb-4">
-            {pending.map((approval, i) => {
-              const asset = approval.asset_id ? assets[approval.asset_id] : null
-              const accent = asset?.channel === 'instagram'
-                ? 'rgba(225,48,108,0.18)'
-                : asset?.channel === 'linkedin'
-                ? 'rgba(0,119,181,0.18)'
-                : asset?.channel === 'x'
-                ? 'rgba(29,161,242,0.18)'
-                : asset?.channel === 'google_ads'
-                ? 'rgba(66,133,244,0.18)'
-                : 'rgba(201,168,76,0.14)'
-              const openDetail = () => setSelected({ approval, asset, plan: approval.weekly_plan_id ? plans[approval.weekly_plan_id] ?? null : null })
-              return (
-                <AnimatedContent key={approval.id} delay={i * 60}>
-                  <div className="rounded-[20px] p-[2px]" style={{ background: `linear-gradient(135deg, ${accent}, rgba(10,10,10,0.2) 65%, transparent)` }}>
-                    <div className="rounded-[18px] bg-[#111827] p-4">
-                      {/* Thumbnail + content row */}
-                      <div className="flex gap-3 mb-4">
-                        <button onClick={openDetail} className="shrink-0">
-                          <ProjectImage
-                            url={asset?.design_thumbnail_url ?? null}
-                            alt=""
-                            className="w-20 h-20 rounded-xl overflow-hidden border border-[rgba(201,168,76,0.1)]"
-                          />
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <span className="font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] bg-[rgba(201,168,76,0.1)] border border-[rgba(201,168,76,0.2)] px-2 py-0.5 rounded-full">
-                              {asset ? CHANNEL_LABELS[asset.channel] || asset.channel : 'Plan'}
-                            </span>
-                            {!!asset?.qa_score && <span className="font-['IBM_Plex_Mono'] text-xs text-[#10B981]">QA {asset.qa_score}/100</span>}
-                          </div>
-                          {asset?.copy_en && <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2 mb-1">{asset.copy_en}</p>}
-                          {asset?.copy_ar && <p className="font-['Cairo'] text-xs text-[rgba(248,246,241,0.35)] line-clamp-1" dir="rtl">{asset.copy_ar}</p>}
-                          {!asset && approval.weekly_plan_id && plans[approval.weekly_plan_id] && (
-                            <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] line-clamp-2">{plans[approval.weekly_plan_id].objective}</p>
-                          )}
-                          {!asset && approval.weekly_plan_id && !plans[approval.weekly_plan_id] && (
-                            <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">Weekly plan — tap View to see details</p>
-                          )}
-                        </div>
-                      </div>
-                      {/* Action buttons — full width, large touch targets */}
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          onClick={openDetail}
-                          className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.6)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 min-h-[52px] active:bg-[rgba(255,255,255,0.05)] transition-colors"
-                        >
-                          <Eye size={14} /> View
-                        </button>
-                        <button
-                          onClick={() => approve(approval.id)}
-                          disabled={deciding === approval.id}
-                          className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-sm font-bold text-[#10B981] bg-[rgba(16,185,129,0.12)] border border-[rgba(16,185,129,0.3)] rounded-xl py-3 min-h-[52px] active:bg-[rgba(16,185,129,0.25)] transition-colors disabled:opacity-40"
-                        >
-                          <ThumbsUp size={15} /> Approve
-                        </button>
-                        <button
-                          onClick={openDetail}
-                          disabled={deciding === approval.id}
-                          className="flex items-center justify-center gap-1.5 font-['IBM_Plex_Sans'] text-sm font-bold text-[#EF4444] bg-[rgba(239,68,68,0.12)] border border-[rgba(239,68,68,0.3)] rounded-xl py-3 min-h-[52px] active:bg-[rgba(239,68,68,0.25)] transition-colors disabled:opacity-40"
-                        >
-                          <ThumbsDown size={15} /> Reject
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </AnimatedContent>
-              )
-            })}
+      <div className="max-w-5xl mx-auto px-6 py-6">
+        {loading && (
+          <div className="flex items-center justify-center gap-2 text-gray-400 py-24">
+            <Loader2 size={16} className="animate-spin" />
+            <span className="text-sm">Loading inbox...</span>
           </div>
         )}
 
-        {!loading && !error && activePublishedJobs.length > 0 && (
-          <AnimatedContent delay={180}>
-            <div className="mt-6 mb-4 flex items-center justify-between">
-              <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#F8F6F1]">Published</h2>
-              <span className="font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.45)]">{activePublishedJobs.length} jobs</span>
-            </div>
-            <div className="space-y-3 pb-4">
-              {activePublishedJobs.map((job, i) => (
-                <AnimatedContent key={job.id} delay={i * 50}>
-                  <Card>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-['IBM_Plex_Sans'] text-sm text-[#F8F6F1] font-medium">{job.channel}</p>
-                        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-1">
-                          {job.status === 'published' ? 'Published' : 'Scheduled'} • {new Date(job.scheduled_at).toLocaleString()}
-                        </p>
-                      </div>
-                      <Badge variant={job.status === 'published' ? 'success' : 'gold'}>{job.status}</Badge>
+        {error && !loading && (
+          <div className="text-center py-16">
+            <p className="text-sm text-red-500">{error}</p>
+            <button onClick={fetchAll} className="mt-3 text-sm text-indigo-600 hover:underline">Retry</button>
+          </div>
+        )}
+
+        {!loading && !error && pending.length === 0 && (
+          <div className="text-center py-24">
+            <CheckCircle size={40} className="text-emerald-400 mx-auto mb-3" />
+            <p className="text-base font-semibold text-gray-900">All clear</p>
+            <p className="text-sm text-gray-500 mt-1">No assets waiting for approval</p>
+            <Link href="/pipeline" className="mt-4 inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline">
+              View pipeline board <ChevronRight size={14} />
+            </Link>
+          </div>
+        )}
+
+        {!loading && !error && pending.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+            {/* Left — queue list */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">
+                Queue — {pending.length} pending
+              </p>
+              {pending.map((approval, idx) => {
+                const asset = approval.asset_id ? assets[approval.asset_id] : null
+                const proj = asset ? projectMap.get(asset.project_id) : null
+                const projColor = proj ? (PROJECT_COLORS[proj.slug] ?? '#6B7280') : '#6B7280'
+                const isActive = idx === activeIndex
+
+                return (
+                  <button
+                    key={approval.id}
+                    onClick={() => setActiveIndex(idx)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-white border border-gray-200 shadow-xs' : 'hover:bg-white hover:border-gray-200 border border-transparent'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: projColor }} />
+                      <span className="text-sm font-medium text-gray-800 truncate">{proj?.name ?? '—'}</span>
+                      <span className="text-xs text-gray-400 ml-auto shrink-0">{CHANNEL_LABELS[asset?.channel ?? ''] ?? asset?.channel ?? '—'}</span>
                     </div>
-                    {job.platform_post_id && (
-                      <p className="font-['IBM_Plex_Mono'] text-xs text-[#C9A84C] mt-3 break-all">{job.platform_post_id}</p>
+                    {asset?.copy_ar && (
+                      <p dir="rtl" className="font-arabic text-xs text-gray-500 truncate mt-1">{asset.copy_ar}</p>
                     )}
-                    {job.error_message && (
-                      <p className="font-['IBM_Plex_Sans'] text-xs text-[#EF4444] mt-3">{job.error_message}</p>
-                    )}
-                  </Card>
-                </AnimatedContent>
-              ))}
+                  </button>
+                )
+              })}
             </div>
-          </AnimatedContent>
+
+            {/* Right — cockpit */}
+            <div>
+              {current ? (
+                <ApprovalCockpit
+                  approval={current}
+                  asset={currentAsset}
+                  project={currentProject}
+                  deciding={deciding === current.id}
+                  onApprove={() => decide(current.id, 'approved')}
+                  onReject={(reason) => decide(current.id, 'rejected', reason)}
+                />
+              ) : (
+                <div className="bg-white border border-gray-200 rounded-xl h-64 flex items-center justify-center">
+                  <p className="text-sm text-gray-400">Select an item from the queue</p>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

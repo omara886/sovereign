@@ -414,6 +414,62 @@ def _build_agent_statuses(job: dict | None) -> list[dict]:
     return agents
 
 
+@router.get("/board")
+async def pipeline_board(db: AsyncSession = Depends(get_db)):
+    """Factory line board — all assets grouped by pipeline stage."""
+    from app.models.asset import Asset
+    from app.models.project import Project
+
+    assets = (await db.execute(
+        select(Asset).order_by(Asset.created_at.desc()).limit(200)
+    )).scalars().all()
+
+    projects = {str(p.id): p for p in (await db.execute(select(Project))).scalars().all()}
+
+    STAGE_MAP = {
+        "qa_pending":        "Design",
+        "qa_failed":         "Arabic QA",
+        "approval_pending":  "Approval",
+        "approved":          "Scheduled",
+        "publishing":        "Scheduled",
+        "published":         "Published",
+        "rejected":          "Rejected",
+    }
+
+    board: dict[str, list] = {
+        "Strategy": [], "Copy": [], "Design": [], "Arabic QA": [],
+        "Brand QA": [], "Approval": [], "Scheduled": [],
+        "Published": [], "Rejected": [],
+    }
+
+    for asset in assets:
+        stage = STAGE_MAP.get(asset.status, "Copy")
+        proj = projects.get(str(asset.project_id))
+        card = {
+            "id": str(asset.id),
+            "project_name": proj.name if proj else "Unknown",
+            "project_slug": proj.slug if proj else "",
+            "channel": asset.channel,
+            "type": asset.type,
+            "language": asset.language,
+            "copy_ar": (asset.copy_ar or "")[:80],
+            "copy_en": (asset.copy_en or "")[:80],
+            "thumbnail_url": asset.design_thumbnail_url,
+            "status": asset.status,
+            "qa_score": asset.qa_score,
+            "created_at": asset.created_at.isoformat() if asset.created_at else None,
+        }
+        if stage in board:
+            board[stage].append(card)
+
+    return {
+        "stages": [
+            {"name": k, "count": len(v), "assets": v}
+            for k, v in board.items()
+        ]
+    }
+
+
 @router.get("/lab/status")
 async def lab_status(db: AsyncSession = Depends(get_db)):
     """Lab control-room: pipeline status, agent cards, health checks, pending approvals."""

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.memory_tools import get_brand_memory, get_project_memory
+from app.utils.arabic_qa import run_arabic_qa
 
 SYSTEM_PROMPT = """You are the QA Agent for Sovereign marketing content. Score 0-100. Pass ≥70.
 
@@ -105,6 +106,21 @@ class QAAgent(BaseAgent):
         channel: str,
         claim_flags: list[str],
     ) -> dict:
+        # Arabic QA runs FIRST — CRITICAL issues block immediately, no LLM call needed
+        arabic_result = run_arabic_qa({"copy_ar": copy_ar, "cta_ar": cta_ar})
+        if arabic_result["blocked"]:
+            return {
+                "qa_score": 0,
+                "qa_passed": False,
+                "checks": [
+                    {"check_name": "arabic_script_qa", "status": "fail",
+                     "note": i["message"], "points_awarded": 0}
+                    for i in arabic_result["issues"]
+                ],
+                "required_fixes": [i["message"] for i in arabic_result["issues"]],
+                "arabic_qa": arabic_result,
+            }
+
         project_mem = await get_project_memory(db, project_id)
         excluded_topics = []
         if project_mem and isinstance(project_mem.constraints, dict):
@@ -127,11 +143,12 @@ class QAAgent(BaseAgent):
             "Score 4 QA categories. Return ONLY valid JSON with: qa_score (0-100), qa_passed (bool), checks array, required_fixes array."
         )
         result = await self.run(msg, db)
+        decoder = json.JSONDecoder()
         start = result.find("{")
-        end = result.rfind("}") + 1
-        if start >= 0 and end > start:
+        if start >= 0:
             try:
-                return json.loads(result[start:end])
+                parsed, _ = decoder.raw_decode(result, start)
+                return parsed
             except json.JSONDecodeError:
                 pass
         return {

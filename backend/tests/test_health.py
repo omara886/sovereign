@@ -83,3 +83,34 @@ def test_lab_agent_keywords_cover_all_agents():
     mapped = set(_AGENT_KEYWORDS.keys())
     uncovered = keys - mapped
     assert not uncovered, f"Agents with no keyword mapping: {uncovered}"
+
+
+# ── Acceptance Tests (auditor requirements) ────────────────────────────────────
+
+def test_arabic_qa_blocks_chinese_contamination():
+    from app.utils.arabic_qa import run_arabic_qa
+    result = run_arabic_qa({'copy_ar': '痛点 في النص العربي مع صيني'})
+    assert result['blocked'], "FAIL: Chinese characters not blocked"
+    assert result['issues'][0]['type'] == 'CJK_CONTAMINATION'
+
+
+def test_arabic_qa_passes_clean_arabic():
+    from app.utils.arabic_qa import run_arabic_qa
+    result = run_arabic_qa({'copy_ar': 'رفيقك الصحي الذكي — تقييم صحتك في ٨ دقائق'})
+    assert result['passed'], f"FAIL: Clean Arabic failed QA: {result['issues']}"
+
+
+def test_arabic_qa_blocks_japanese():
+    from app.utils.arabic_qa import run_arabic_qa
+    result = run_arabic_qa({'copy_ar': 'محتوى عربي مع كاتاكانا アラビア語'})
+    assert result['blocked'], "FAIL: Japanese Katakana not blocked"
+
+
+def test_no_bulk_approve_in_frontend():
+    import subprocess
+    result = subprocess.run(
+        ['grep', '-rn', 'Approve All\\|approveAll\\|bulkProgress\\|bulk.*approv',
+         '../frontend/app/', '--include=*.tsx', '--include=*.ts'],
+        capture_output=True, text=True, cwd='.'
+    )
+    assert not result.stdout.strip(), f"FAIL: Bulk approve still exists:\n{result.stdout}"

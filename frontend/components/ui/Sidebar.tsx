@@ -2,7 +2,7 @@
 import { useLayoutEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BarChart3, CalendarDays, FolderKanban, Inbox, LayoutDashboard, LogOut, Settings, FlaskConical } from 'lucide-react'
+import { BarChart3, CalendarDays, FolderKanban, Inbox, LayoutDashboard, LogOut, Settings, FlaskConical, GitBranch } from 'lucide-react'
 
 function getCurrentWeekMondayHref() {
   const now = new Date()
@@ -13,13 +13,14 @@ function getCurrentWeekMondayHref() {
 }
 
 const NAV_ITEMS = [
-  { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/projects', icon: FolderKanban, label: 'Projects' },
+  { href: '/',          icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/projects',  icon: FolderKanban,    label: 'Projects' },
+  { href: '/pipeline',  icon: GitBranch,        label: 'Pipeline' },
   { href: getCurrentWeekMondayHref(), icon: CalendarDays, label: 'Plans' },
-  { href: '/inbox', icon: Inbox, label: 'Inbox' },
-  { href: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { href: '/lab', icon: FlaskConical, label: 'Lab' },
-  { href: '/settings', icon: Settings, label: 'Settings' },
+  { href: '/inbox',     icon: Inbox,            label: 'Inbox' },
+  { href: '/analytics', icon: BarChart3,        label: 'Analytics' },
+  { href: '/lab',       icon: FlaskConical,     label: 'Lab' },
+  { href: '/settings',  icon: Settings,         label: 'Settings' },
 ]
 
 export default function Sidebar() {
@@ -68,56 +69,39 @@ export default function Sidebar() {
     <>
       {!isMobile && (
         <>
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex fixed top-0 left-0 h-screen w-60 flex-col bg-[#0A0A0A] border-r border-[rgba(201,168,76,0.1)] z-40">
-        <div className="p-6 border-b border-[rgba(201,168,76,0.1)]">
-          <span className="font-['Cormorant_Garamond'] text-xl text-[#C9A84C] tracking-widest uppercase">
-            Sovereign
-          </span>
+      {/* Desktop sidebar — Linear/Notion style */}
+      <aside className="hidden md:flex fixed top-0 left-0 h-screen w-56 flex-col bg-white border-r border-gray-200 z-40">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <span className="text-sm font-bold text-gray-900">Sovereign</span>
+          <span className="block text-xs text-gray-400 mt-0.5">Marketing OS</span>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}
-              className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 ${
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors min-h-[36px] ${
                 isActive(href)
-                  ? 'bg-[rgba(201,168,76,0.12)] text-[#C9A84C]'
-                  : 'text-[rgba(248,246,241,0.5)] hover:text-[#F8F6F1] hover:bg-[rgba(255,255,255,0.04)]'
+                  ? 'bg-indigo-50 text-indigo-700'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                minHeight: 44,
-                padding: '12px 12px',
-                textDecoration: 'none',
-              }}
             >
-              <Icon size={18} className="shrink-0" />
-              <span className="font-['IBM_Plex_Sans'] text-sm">{label}</span>
+              <Icon size={16} className="shrink-0" />
+              <span className="flex-1">{label}</span>
               {label === 'Inbox' && inboxCount > 0 && (
-                <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center">
+                <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                   {inboxCount}
                 </span>
               )}
-              {isActive(href) && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#C9A84C]" />}
             </Link>
           ))}
         </nav>
 
-        <div className="p-3 border-t border-[rgba(201,168,76,0.1)]">
+        <div className="px-3 py-3 border-t border-gray-100">
           <button onClick={logout}
-            className="flex items-center gap-3 px-3 py-3 rounded-xl w-full text-[rgba(248,246,241,0.4)] hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.05)] transition-all duration-200"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              minHeight: 44,
-              padding: '12px 12px',
-            }}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors w-full min-h-[36px]"
           >
             <LogOut size={16} className="shrink-0" />
-            <span className="font-['IBM_Plex_Sans'] text-sm">Sign Out</span>
+            <span className="text-sm">Sign Out</span>
           </button>
         </div>
       </aside>
@@ -133,35 +117,34 @@ export default function Sidebar() {
           left: 0,
           right: 0,
           zIndex: 50,
-          background: 'rgba(10,10,10,0.97)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          borderTop: '1px solid rgba(201,168,76,0.12)',
+          background: 'rgba(255,255,255,0.97)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderTop: '1px solid #E5E7EB',
           paddingBottom: 'env(safe-area-inset-bottom)',
-          height: 'calc(60px + env(safe-area-inset-bottom))',
+          height: 'calc(56px + env(safe-area-inset-bottom))',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 4px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', height: 56 }}>
           {NAV_ITEMS.slice(0, 5).map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}
-              className={`relative flex flex-col items-center gap-0.5 rounded-lg flex-1 justify-center transition-colors duration-200 ${
-                isActive(href) ? 'text-[#C9A84C]' : 'text-[rgba(248,246,241,0.35)]'
+              className={`relative flex flex-col items-center gap-0.5 flex-1 justify-center transition-colors ${
+                isActive(href) ? 'text-indigo-600' : 'text-gray-400'
               }`}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                minHeight: 52,
-                padding: '8px 8px',
+                height: '100%',
                 textDecoration: 'none',
                 flex: 1,
               }}
             >
-              <Icon size={20} />
-              <span className="font-['IBM_Plex_Sans'] text-[9px] leading-tight text-center">{label}</span>
+              <Icon size={19} />
+              <span className="text-[9px] font-medium leading-tight">{label}</span>
               {label === 'Inbox' && inboxCount > 0 && (
-                <span className="absolute top-1 right-2 min-w-4 h-4 px-1 rounded-full bg-[#EF4444] text-white text-[9px] font-bold flex items-center justify-center">
+                <span className="absolute top-2 right-2 min-w-4 h-4 px-1 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">
                   {inboxCount}
                 </span>
               )}
