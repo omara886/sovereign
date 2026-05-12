@@ -199,19 +199,17 @@ class DesignAgent(BaseAgent):
 
             memory_snapshot = self._build_memory_snapshot(brand_mem, project_mem, channel, "awareness")
 
-            # ── Generate both variants concurrently ──────────────────────────
-            prompt_a, prompt_b = await asyncio.gather(
-                self._get_prompt(
-                    self, copy_en, copy_ar, channel, colors, style, img_style,
-                    "awareness", brief, dos, variant="A"
-                ),
-                self._get_prompt(
-                    self._commercial_agent, copy_en, copy_ar, channel, colors, style, img_style,
-                    "awareness", brief, dos, variant="B"
-                ),
+            # ── Generate prompts sequentially (avoid asyncio CancelledError) ──
+            prompt_a = await self._get_prompt(
+                self, copy_en, copy_ar, channel, colors, style, img_style,
+                "awareness", brief, dos, variant="A"
+            )
+            prompt_b = await self._get_prompt(
+                self._commercial_agent, copy_en, copy_ar, channel, colors, style, img_style,
+                "awareness", brief, dos, variant="B"
             )
 
-            async def _generate_variant(prompt: str, variant_label: str, vid_suffix: str) -> dict:
+            async def _generate_one(prompt: str, variant_label: str, vid_suffix: str) -> dict:
                 try:
                     img_bytes = await generate_image_fal(
                         prompt, "fal-ai/flux/schnell", fal_dims["width"], fal_dims["height"]
@@ -225,19 +223,18 @@ class DesignAgent(BaseAgent):
                     durl  = await upload_to_r2(with_text, f"{vid}.png",       "image/png")
                     turl  = await upload_to_r2(thumb,     f"{vid}_thumb.jpg", "image/jpeg")
                     return {
-                        "variant":    variant_label,
-                        "design_url": durl,
+                        "variant":       variant_label,
+                        "design_url":    durl,
                         "thumbnail_url": turl,
-                        "fal_prompt": prompt,
-                        "status": "ok",
+                        "fal_prompt":    prompt[:200],
+                        "status":        "ok",
                     }
-                except Exception as exc:
+                except BaseException as exc:  # catch CancelledError (Python 3.13 BaseException)
                     return {"variant": variant_label, "error": str(exc), "status": "failed"}
 
-            variant_a_data, variant_b_data = await asyncio.gather(
-                _generate_variant(prompt_a, "A", "vA"),
-                _generate_variant(prompt_b, "B", "vB"),
-            )
+            # Run sequentially — avoids CancelledError propagation in asyncio.gather
+            variant_a_data = await _generate_one(prompt_a, "A", "vA")
+            variant_b_data = await _generate_one(prompt_b, "B", "vB")
 
             # Variant A is primary; fallback to B if A failed
             primary_variant = variant_a_data if variant_a_data["status"] == "ok" else variant_b_data
