@@ -111,30 +111,34 @@ class DesignAgent(BaseAgent):
                               brand_style: str, funnel_stage: str, brief: str) -> str:
         primary = brand_colors.get("primary", "#001A4D")
         accent  = brand_colors.get("accent",  "#4169E1")
-        # Format-first prompt structure (Rule 4 from research)
+
+        # Exact formula from research:
+        # [format] + [subject] + [brand mood] + [palette hint] + [composition with text-safe] +
+        # [material/lighting] + [cleanliness constraints]
         msg = (
-            f"BRAND: {brand_style}\n"
-            f"PALETTE: primary {primary}, accent {accent}\n"
-            f"CAMPAIGN: {copy_en[:80]}\n"
+            f"Generate a fal.ai background image prompt using this exact structure:\n"
+            f"[format] + [subject] + [brand mood] + [palette hint] + "
+            f"[composition with text-safe area bottom 45%] + [material/lighting] + [cleanliness constraints]\n\n"
+            f"Brand context: {brand_style} | palette: primary {primary}, accent {accent}\n"
+            f"Campaign: {copy_en[:80]}\n"
         )
         if brief:
-            msg += f"BRAND BRIEF: {brief[:150]}\n"
+            msg += f"Brand brief: {brief[:120]}\n"
         msg += (
-            "\nGenerate the fal.ai background prompt using format-first structure:\n"
-            "[format] → [visual language] → [composition] → [subject] → [palette] → [exclusions]\n"
-            "Reserve bottom 45% as clear text-safe zone. No text in image."
+            "\nOutput: ONE fal.ai prompt only, max 80 words. No text/letters/typography in image. "
+            "Negative prompt not needed — just the positive prompt for the background."
         )
         try:
             p = await agent.run(msg, None)  # type: ignore
             return p.strip().strip('"').strip("'")
         except Exception:
+            # Research-validated fallback formula
             return (
-                f"Premium campaign poster background, flat 3D illustration hybrid, "
-                f"asymmetrical modular grid, hero element center-left, "
-                f"generous negative space bottom 45% for text overlay, "
-                f"brand color {primary} dominant, accent {accent} highlights, "
-                f"matte vector and soft gradient, high-end health-tech brand aesthetic, "
-                f"no text, no people, no watermark, no stock photo look"
+                f"Square premium wellness campaign background, modern healthcare brand aesthetic, "
+                f"calm contemporary composition, palette influenced by brand blue {accent} "
+                f"with soft ivory neutrals, clean negative space on the right side for Arabic "
+                f"headline overlay, elegant layered depth, subtle product-ad feel, "
+                f"no text, no letters, no watermark, no logo, no generic corporate portrait"
             )
 
     def _build_memory_snapshot(self, brand_mem, project_mem, channel: str) -> dict:

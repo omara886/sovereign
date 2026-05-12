@@ -1,160 +1,212 @@
 """
 Template-driven creative renderer for Therapia marketing assets.
 
-Architecture:
-  1. fal.ai generates background/atmosphere ONLY (no text baked in)
-  2. Pillow templates compose the final design with:
-     - Arabic headline via Thmanyah Black font + arabic_reshaper + bidi
-     - Brand colors, safe zones, CTA elements
-     - Product showcase OR infographic layout
+Arabic rendering strategy:
+  PREFERRED  — Pillow + libraqm + HarfBuzz + FriBiDi
+               ImageFont.Layout.RAQM + direction='rtl' + language='ar'
+               Full OpenType shaping, correct joining, correct BiDi ordering.
+
+  FALLBACK   — arabic_reshaper + python-bidi + Pillow basic layout
+               Used only when libraqm is unavailable (detected at startup).
+               DO NOT combine both paths — RAQM already handles shaping+bidi.
+
+  NEVER      — Ask fal.ai to render Arabic text.
 
 Two templates:
-  render_product_showcase() — Variant A: headline + benefit + CTA + brand frame
-  render_infographic()      — Variant B: metric hero + benefit blocks + headline
+  render_product_showcase() — Variant A
+  render_infographic()      — Variant B
 
-Arabic rules enforced:
-  - Max 2 lines for headline, 1 line for subhead
-  - Minimum font size 36px for readability
-  - Right-aligned in dedicated text zone
-  - No text rendered on top of faces or product details
+Brand colors: all final text/CTA/pill/stat colors come from brand_memory,
+never hardcoded. Tokens: accent, primary (background), text=off-white on dark.
 """
 import asyncio
+import logging
+import warnings
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, features
 
-# ── Fonts ──────────────────────────────────────────────────────────────────
+logger = logging.getLogger(__name__)
+
+# ── RAQM detection (done once at import) ──────────────────────────────────────
+_RAQM_AVAILABLE: bool = features.check("raqm")
+
+if _RAQM_AVAILABLE:
+    logger.info("image_tools: RAQM available — using HarfBuzz shaping + FriBiDi RTL")
+else:
+    logger.warning(
+        "image_tools: RAQM NOT available — using arabic_reshaper+python-bidi fallback. "
+        "Install libraqm + rebuild Pillow from source for production-grade Arabic."
+    )
+
+# ── Fonts ──────────────────────────────────────────────────────────────────────
 _ASSETS = Path(__file__).parent.parent.parent / "assets" / "fonts" / "thmanyah typeface"
 _SANS   = _ASSETS / "thmanyahsans" / "otf"
 
-FONT_BLACK   = _SANS / "thmanyahsans-Black.otf"
-FONT_BOLD    = _SANS / "thmanyahsans-Bold.otf"
-FONT_MEDIUM  = _SANS / "thmanyahsans-Medium.otf"
-FONT_REGULAR = _SANS / "thmanyahsans-Regular.otf"
+_FONT_BLACK_PATH   = _SANS / "thmanyahsans-Black.otf"
+_FONT_BOLD_PATH    = _SANS / "thmanyahsans-Bold.otf"
+_FONT_REGULAR_PATH = _SANS / "thmanyahsans-Regular.otf"
 
-_FONTS_LEGACY    = Path(__file__).parent.parent.parent / "fonts"
-_FONT_BOLD_FB    = _FONTS_LEGACY / "thmanyah-bold.otf"
-_FONT_REGULAR_FB = _FONTS_LEGACY / "thmanyah-regular.otf"
+_FONTS_LEGACY = Path(__file__).parent.parent.parent / "fonts"
+_FB_BOLD    = _FONTS_LEGACY / "thmanyah-bold.otf"
+_FB_REGULAR = _FONTS_LEGACY / "thmanyah-regular.otf"
 
-def _resolve(primary: Path, fallback: Path) -> Path:
-    return primary if primary.exists() else fallback
+def _resolve(p: Path, fb: Path) -> Path:
+    return p if p.exists() else fb
 
-FONT_BLACK   = _resolve(FONT_BLACK,   _FONT_BOLD_FB)
-FONT_BOLD    = _resolve(FONT_BOLD,    _FONT_BOLD_FB)
-FONT_MEDIUM  = _resolve(FONT_MEDIUM,  _FONT_BOLD_FB)
-FONT_REGULAR = _resolve(FONT_REGULAR, _FONT_REGULAR_FB)
+FONT_BLACK_PATH   = _resolve(_FONT_BLACK_PATH,   _FB_BOLD)
+FONT_BOLD_PATH    = _resolve(_FONT_BOLD_PATH,     _FB_BOLD)
+FONT_REGULAR_PATH = _resolve(_FONT_REGULAR_PATH,  _FB_REGULAR)
 
 
-# ── Arabic text utilities ──────────────────────────────────────────────────
+# ── Font loader: RAQM-preferred ───────────────────────────────────────────────
 
-def _reshape_arabic(text: str) -> str:
+def _load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
+    """Load font with RAQM layout engine when available."""
+    try:
+        if _RAQM_AVAILABLE:
+            return ImageFont.truetype(str(path), size, layout_engine=ImageFont.Layout.RAQM)
+        return ImageFont.truetype(str(path), size)
+    except Exception:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return ImageFont.load_default(size=size)
+
+
+# ── Arabic text rendering ──────────────────────────────────────────────────────
+
+def _prepare_arabic(text: str) -> str:
     """
-    Arabic for Pillow: get_display(reshape(text)) — words render connected.
-    Non-connecting chars (ا, د, ر, و) at word boundaries may have minimal gap;
-    acceptable for marketing copy. Use SHORT copy (3-5 words per line).
+    RAQM path: return text unchanged — RAQM/HarfBuzz handles shaping+BiDi internally.
+    Fallback path: apply arabic_reshaper + python-bidi.
+    NEVER combine both — RAQM and reshaper conflict.
     """
+    if _RAQM_AVAILABLE:
+        return text  # RAQM does shaping and RTL ordering itself
+    # Fallback only
     try:
         import arabic_reshaper
         from bidi.algorithm import get_display
-        return get_display(arabic_reshaper.reshape(text))
+        return get_display(arabic_reshaper.reshape(text), base_dir="R")
     except Exception:
         return text
 
 
-def _load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
+def _draw_arabic_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    x: int,
+    y: int,
+    fill: tuple,
+    anchor: str = "ra",  # right-aligned anchor
+) -> None:
+    """Draw Arabic text with correct shaping and shadow."""
+    display_text = _prepare_arabic(text)
+    kwargs: dict = {"font": font, "fill": fill}
+    if _RAQM_AVAILABLE:
+        kwargs["direction"] = "rtl"
+        kwargs["language"]  = "ar"
+        kwargs["anchor"]    = anchor  # "ra" = right-ascender, right-aligned
+    else:
+        # Fallback: draw from right edge manually (text already pre-reversed by bidi)
+        try:
+            bb = draw.textbbox((0, 0), display_text, font=font)
+            w = bb[2] - bb[0]
+            x = x - w  # shift left so right edge aligns
+        except Exception:
+            pass
+        kwargs.pop("anchor", None)
+
+    # Shadow
+    shadow_fill = (0, 0, 0, 80)
     try:
-        return ImageFont.truetype(str(path), size)
+        draw.text((x + 2, y + 2), display_text, fill=shadow_fill, font=font,
+                  **({"direction": "rtl", "language": "ar", "anchor": anchor}
+                     if _RAQM_AVAILABLE else {}))
     except Exception:
-        return ImageFont.load_default(size=size)
+        pass
+    draw.text((x, y), display_text, **kwargs)
 
 
-def _text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> int:
-    bbox = draw.textbbox((0, 0), text, font=font)
-    return bbox[2] - bbox[0]
+def _arabic_text_width(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+) -> int:
+    """Measure Arabic text width using the active render path."""
+    display_text = _prepare_arabic(text)
+    try:
+        if _RAQM_AVAILABLE:
+            bb = draw.textbbox((0, 0), display_text, font=font, direction="rtl", language="ar")
+        else:
+            bb = draw.textbbox((0, 0), display_text, font=font)
+        return bb[2] - bb[0]
+    except Exception:
+        return len(text) * (font.size // 2)
 
 
-def _wrap_arabic_lines(text: str, font: ImageFont.FreeTypeFont,
-                        max_px: int, draw: ImageDraw.ImageDraw,
-                        max_lines: int = 3) -> list[str]:
+def _wrap_arabic(
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    max_px: int,
+    draw: ImageDraw.ImageDraw,
+    max_lines: int = 2,
+) -> list[str]:
     """
-    Reliable Arabic line-breaking:
-    1. Work in LOGICAL (un-reshaped) Arabic text to preserve word integrity
-    2. Build lines by adding whole words, measure the RESHAPED version for accuracy
-    3. Each returned string is still in logical form — reshape at draw time
+    Word-wrap Arabic. Measure after shaping (width changes with joining forms).
+    Returns list of LOGICAL strings; _draw_arabic_text shapes each line at draw time.
     """
     words = text.split()
     lines: list[str] = []
-    current_words: list[str] = []
+    current: list[str] = []
 
     for word in words:
-        trial = current_words + [word]
-        # Measure the line by reshaping the combined words left→right then bidi
-        trial_text = " ".join(trial)
-        trial_shaped = _reshape_arabic(trial_text)
-        if _text_width(draw, trial_shaped, font) <= max_px:
-            current_words = trial
+        trial = current + [word]
+        trial_str = " ".join(trial)
+        w = _arabic_text_width(draw, trial_str, font)
+        if w <= max_px:
+            current = trial
         else:
-            if current_words:
-                lines.append(" ".join(current_words))
-            current_words = [word]
+            if current:
+                lines.append(" ".join(current))
+            current = [word]
         if len(lines) >= max_lines:
             break
 
-    if current_words and len(lines) < max_lines:
-        lines.append(" ".join(current_words))
+    if current and len(lines) < max_lines:
+        lines.append(" ".join(current))
 
     return lines[:max_lines]
 
 
-def _draw_arabic_right(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font: ImageFont.FreeTypeFont,
-    right_x: int,
-    y: int,
-    fill: tuple,
-    max_width: int,
-    line_spacing_ratio: float = 1.4,
-) -> int:
-    """Draw Arabic text, right-aligned, with proper reshape+bidi per line."""
-    lines = _wrap_arabic_lines(text, font, max_width, draw)
-    for line in lines:
-        shaped = _reshape_arabic(line)
-        w = _text_width(draw, shaped, font)
-        x = right_x - w
-        # Soft shadow
-        draw.text((x + 2, y + 2), shaped, font=font, fill=(0, 0, 0, 90))
-        draw.text((x, y), shaped, font=font, fill=fill)
-        bbox = draw.textbbox((0, 0), shaped, font=font)
-        line_h = bbox[3] - bbox[1]
-        y += int(line_h * line_spacing_ratio)
-    return y
+# ── Color utils ────────────────────────────────────────────────────────────────
 
-
-def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+def _hex(h: str) -> tuple[int, int, int]:
     h = h.lstrip("#")
     if len(h) == 3:
         h = h[0]*2 + h[1]*2 + h[2]*2
     try:
         return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))  # type: ignore
     except Exception:
-        return (10, 10, 10)
+        return (0, 26, 77)
 
 
-def _gradient_rect(img: Image.Image, x0: int, y0: int, x1: int, y1: int,
-                    top_alpha: int, bottom_alpha: int, color: tuple[int,int,int]) -> None:
-    """Draw a vertical gradient overlay rectangle."""
+def _gradient_rect(
+    img: Image.Image, x0: int, y0: int, x1: int, y1: int,
+    top_alpha: int, bottom_alpha: int, color: tuple[int, int, int]
+) -> None:
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
+    d = ImageDraw.Draw(overlay)
     h = y1 - y0
     for dy in range(h):
         a = int(top_alpha + (bottom_alpha - top_alpha) * dy / max(h, 1))
-        draw.line([(x0, y0 + dy), (x1, y0 + dy)], fill=(*color, a))
+        d.line([(x0, y0 + dy), (x1, y0 + dy)], fill=(*color, a))
     img.alpha_composite(overlay)
 
 
-# ── Template A: Product Showcase ──────────────────────────────────────────
+# ── Template A: Product Showcase ───────────────────────────────────────────────
 
 def _render_product_showcase_sync(
     width: int, height: int,
@@ -166,11 +218,13 @@ def _render_product_showcase_sync(
     brand_accent: str,
     bg_bytes: bytes | None,
 ) -> bytes:
-    primary_rgb = _hex_to_rgb(brand_primary)
-    accent_rgb  = _hex_to_rgb(brand_accent)
-    off_white   = (248, 246, 241)
+    # Brand tokens — all from brand_memory, no hardcoded fallbacks
+    primary_rgb = _hex(brand_primary)
+    accent_rgb  = _hex(brand_accent)
+    text_on_dark = (248, 246, 241)    # off-white headline on dark bg
+    text_on_accent = (255, 255, 255)  # white text on accent pill
 
-    # ── Base canvas ──
+    # ── Canvas ──
     if bg_bytes:
         try:
             bg = Image.open(BytesIO(bg_bytes)).convert("RGBA")
@@ -182,82 +236,72 @@ def _render_product_showcase_sync(
 
     canvas = bg.copy()
 
-    # ── Dark gradient overlay (bottom 65%) ──
+    # ── Dark gradient bottom 65% ──
     _gradient_rect(canvas, 0, int(height * 0.35), width, height,
-                   top_alpha=0, bottom_alpha=230, color=(0, 0, 0))
+                   top_alpha=0, bottom_alpha=235, color=(0, 0, 0))
 
-    # ── Thin top brand bar ──
     draw = ImageDraw.Draw(canvas)
-    bar_h = max(4, height // 200)
-    draw.rectangle([(0, 0), (width, bar_h)], fill=(*accent_rgb, 255))
-
     pad = int(width * 0.07)
     right_edge = width - pad
 
-    # ── Brand name top-left ──
-    brand_font = _load_font(FONT_BOLD, max(18, width // 45))
-    draw.text((pad, bar_h + int(height * 0.025)), "Therapia",
-              font=brand_font, fill=(*accent_rgb, 255))
-
-    # ── Arabic headline (max 2 lines, large) ──
-    headline_size = max(46, width // 16)
-    h_font = _load_font(FONT_BLACK, headline_size)
-    h_y = int(height * 0.52)
-    h_y = _draw_arabic_right(
-        draw, headline_ar, h_font,
-        right_x=right_edge, y=h_y,
-        fill=off_white,
-        max_width=int(width * 0.85),
-    )
-
-    # ── Arabic subheadline (1 line, smaller) ──
-    if subhead_ar.strip():
-        sub_size = max(28, width // 26)
-        s_font = _load_font(FONT_BOLD, sub_size)
-        h_y += int(height * 0.015)
-        h_y = _draw_arabic_right(
-            draw, subhead_ar, s_font,
-            right_x=right_edge, y=h_y,
-            fill=(*accent_rgb, 230),
-            max_width=int(width * 0.75),
-        )
-
-    # ── CTA pill ──
-    if cta_ar.strip() or cta_en.strip():
-        cta_text = _reshape_arabic(cta_ar) if cta_ar.strip() else cta_en
-        cta_size = max(22, width // 35)
-        cta_font = _load_font(FONT_BOLD, cta_size)
-        cta_w = _text_width(draw, cta_text, cta_font) + int(width * 0.06)
-        cta_h = int(height * 0.06)
-        cta_y = height - int(height * 0.1) - cta_h
-        cta_x = right_edge - cta_w
-
-        # Pill background
-        draw.rounded_rectangle(
-            [(cta_x, cta_y), (right_edge, cta_y + cta_h)],
-            radius=cta_h // 2,
-            fill=(*accent_rgb, 255),
-        )
-        # CTA text centered in pill
-        draw.text(
-            (cta_x + (cta_w - _text_width(draw, cta_text, cta_font)) // 2,
-             cta_y + (cta_h - cta_size) // 2),
-            cta_text, font=cta_font, fill=(255, 255, 255, 255),
-        )
-
-    # ── Accent bottom bar ──
-    bar_bottom_h = max(6, height // 120)
-    draw.rectangle([(0, height - bar_bottom_h), (width, height)],
+    # ── Top accent bar ──
+    draw.rectangle([(0, 0), (width, max(4, height // 200))],
                    fill=(*accent_rgb, 255))
 
-    # ── Convert and return ──
-    final = canvas.convert("RGB")
+    # ── Brand name top-left ──
+    brand_font = _load_font(FONT_BOLD_PATH, max(18, width // 45))
+    draw.text((pad, max(4, height // 200) + int(height * 0.02)),
+              "Therapia", font=brand_font, fill=(*accent_rgb, 255))
+
+    # ── Arabic headline — anchored right, max 2 lines ──
+    h_size = max(48, width // 15)
+    h_font = _load_font(FONT_BLACK_PATH, h_size)
+    headline_y = int(height * 0.52)
+    lines = _wrap_arabic(headline_ar, h_font, int(width * 0.84), draw, max_lines=2)
+    for line in lines:
+        _draw_arabic_text(draw, line, h_font, right_edge, headline_y, text_on_dark)
+        try:
+            bb = draw.textbbox((0, 0), _prepare_arabic(line), font=h_font,
+                               **({"direction":"rtl","language":"ar"} if _RAQM_AVAILABLE else {}))
+            headline_y += int((bb[3] - bb[1]) * 1.35)
+        except Exception:
+            headline_y += int(h_size * 1.35)
+
+    # ── Arabic subhead — 1 line ──
+    if subhead_ar.strip():
+        s_size = max(28, width // 26)
+        s_font = _load_font(FONT_BOLD_PATH, s_size)
+        headline_y += int(height * 0.015)
+        _draw_arabic_text(draw, subhead_ar[:50], s_font, right_edge, headline_y,
+                          (*accent_rgb, 210))
+
+    # ── CTA pill (accent background, white text) ──
+    cta_text = cta_ar.strip() or cta_en.strip()
+    if cta_text:
+        cta_size = max(22, width // 35)
+        cta_font = _load_font(FONT_BOLD_PATH, cta_size)
+        cta_w = _arabic_text_width(draw, cta_text, cta_font) + int(width * 0.07)
+        cta_h = int(height * 0.065)
+        cta_y = height - int(height * 0.09) - cta_h
+        cta_x = right_edge - cta_w
+        draw.rounded_rectangle([(cta_x, cta_y), (right_edge, cta_y + cta_h)],
+                                radius=cta_h // 2, fill=(*accent_rgb, 255))
+        pill_center_x = cta_x + cta_w // 2
+        _draw_arabic_text(draw, cta_text, cta_font,
+                          pill_center_x + _arabic_text_width(draw, cta_text, cta_font) // 2,
+                          cta_y + (cta_h - cta_size) // 2,
+                          text_on_accent)
+
+    # ── Bottom accent bar ──
+    draw.rectangle([(0, height - max(6, height // 120)), (width, height)],
+                   fill=(*accent_rgb, 255))
+
     buf = BytesIO()
-    final.save(buf, format="JPEG", quality=92, optimize=True)
+    canvas.convert("RGB").save(buf, format="JPEG", quality=92, optimize=True)
     return buf.getvalue()
 
 
-# ── Template B: Infographic / Outcome Campaign ─────────────────────────────
+# ── Template B: Infographic ────────────────────────────────────────────────────
 
 def _render_infographic_sync(
     width: int, height: int,
@@ -271,140 +315,124 @@ def _render_infographic_sync(
     brand_accent: str,
     bg_bytes: bytes | None,
 ) -> bytes:
-    primary_rgb = _hex_to_rgb(brand_primary)
-    accent_rgb  = _hex_to_rgb(brand_accent)
-    off_white   = (248, 246, 241)
+    primary_rgb  = _hex(brand_primary)
+    accent_rgb   = _hex(brand_accent)
+    text_on_dark = (248, 246, 241)
+    text_on_accent = (255, 255, 255)
 
-    # ── Base canvas ──
     if bg_bytes:
         try:
+            from PIL import ImageFilter
             bg = Image.open(BytesIO(bg_bytes)).convert("RGBA")
             bg = bg.resize((width, height), Image.LANCZOS)
-            # Soften the background for infographic readability
-            from PIL import ImageFilter
-            bg = bg.filter(ImageFilter.GaussianBlur(radius=8))
+            bg = bg.filter(ImageFilter.GaussianBlur(radius=6))
         except Exception:
             bg = Image.new("RGBA", (width, height), (*primary_rgb, 255))
     else:
         bg = Image.new("RGBA", (width, height), (*primary_rgb, 255))
 
     canvas = bg.copy()
-
-    # Strong overlay — infographic needs clean reading surface
     _gradient_rect(canvas, 0, 0, width, height,
-                   top_alpha=200, bottom_alpha=240, color=primary_rgb)
+                   top_alpha=190, bottom_alpha=240, color=primary_rgb)
 
     draw = ImageDraw.Draw(canvas)
     pad = int(width * 0.07)
     right_edge = width - pad
 
-    # ── Top brand bar ──
-    bar_h = max(4, height // 200)
-    draw.rectangle([(0, 0), (width, bar_h)], fill=(*accent_rgb, 255))
+    # ── Top accent bar + brand name ──
+    draw.rectangle([(0, 0), (width, max(4, height // 200))],
+                   fill=(*accent_rgb, 255))
+    brand_font = _load_font(FONT_BOLD_PATH, max(18, width // 45))
+    draw.text((pad, max(4, height // 200) + int(height * 0.02)),
+              "Therapia", font=brand_font, fill=(*accent_rgb, 255))
 
-    # ── Brand name ──
-    brand_font = _load_font(FONT_BOLD, max(18, width // 45))
-    draw.text((pad, bar_h + int(height * 0.025)), "Therapia",
-              font=brand_font, fill=(*accent_rgb, 255))
-
-    # ── Hero metric — number large, label smaller ──
+    # ── Hero metric: number + label separately ──
     if metric_value.strip():
-        num_size = max(110, width // 7)
-        lbl_size = max(50, width // 14)
-        num_font = _load_font(FONT_BLACK, num_size)
-        lbl_font = _load_font(FONT_BOLD, lbl_size)
+        num_size = max(120, width // 6)
+        lbl_size = max(52, width // 13)
+        num_font = _load_font(FONT_BLACK_PATH, num_size)
+        lbl_font = _load_font(FONT_BOLD_PATH,  lbl_size)
 
-        num_w = _text_width(draw, metric_value, num_font)
-        lbl_shaped = _reshape_arabic(metric_label) if metric_label else ""
-        lbl_w = _text_width(draw, lbl_shaped, lbl_font) if lbl_shaped else 0
-
-        m_y = int(height * 0.12)
         # Number centered
-        num_x = (width - num_w) // 2
-        draw.text((num_x + 3, m_y + 3), metric_value, font=num_font, fill=(0, 0, 0, 100))
-        draw.text((num_x, m_y), metric_value, font=num_font, fill=(*accent_rgb, 255))
+        num_w = _arabic_text_width(draw, metric_value, num_font)
+        num_x = (width + num_w) // 2  # right anchor for centered effect
+        draw.text((num_x + 3, int(height * 0.13) + 3), metric_value,
+                  font=num_font, fill=(0, 0, 0, 100))
+        draw.text((num_x, int(height * 0.13)), metric_value,
+                  font=num_font, fill=(*accent_rgb, 255))
 
-        # Label below number
-        if lbl_shaped:
-            lbl_x = (width - lbl_w) // 2
-            lbl_y = m_y + num_size + int(height * 0.01)
-            draw.text((lbl_x + 2, lbl_y + 2), lbl_shaped, font=lbl_font, fill=(0, 0, 0, 80))
-            draw.text((lbl_x, lbl_y), lbl_shaped, font=lbl_font, fill=(*accent_rgb, 200))
+        # Label below
+        if metric_label.strip():
+            lbl_x = (width + _arabic_text_width(draw, metric_label, lbl_font)) // 2
+            lbl_y = int(height * 0.13) + num_size + int(height * 0.01)
+            _draw_arabic_text(draw, metric_label, lbl_font, lbl_x, lbl_y,
+                              (*accent_rgb, 190))
 
     # ── Arabic headline ──
-    h_size = max(38, width // 20)
-    h_font = _load_font(FONT_BLACK, h_size)
-    h_y = int(height * 0.42) if metric_value.strip() else int(height * 0.20)
-    h_y = _draw_arabic_right(
-        draw, headline_ar, h_font,
-        right_x=right_edge, y=h_y,
-        fill=off_white,
-        max_width=int(width * 0.85),
-    )
+    h_size = max(40, width // 20)
+    h_font = _load_font(FONT_BLACK_PATH, h_size)
+    h_y = int(height * 0.44) if metric_value.strip() else int(height * 0.20)
+    lines = _wrap_arabic(headline_ar, h_font, int(width * 0.84), draw, max_lines=2)
+    for line in lines:
+        _draw_arabic_text(draw, line, h_font, right_edge, h_y, text_on_dark)
+        try:
+            bb = draw.textbbox((0, 0), _prepare_arabic(line), font=h_font,
+                               **({"direction":"rtl","language":"ar"} if _RAQM_AVAILABLE else {}))
+            h_y += int((bb[3] - bb[1]) * 1.35)
+        except Exception:
+            h_y += int(h_size * 1.35)
 
-    # ── Benefit blocks (3 items, horizontal or stacked) ──
+    # ── Benefit blocks ──
     if benefits:
         b_size = max(22, width // 38)
-        b_font = _load_font(FONT_REGULAR, b_size)
+        b_font = _load_font(FONT_REGULAR_PATH, b_size)
         b_y = h_y + int(height * 0.04)
-        block_h = int(height * 0.085)
-        block_pad = int(width * 0.03)
+        block_pad = int(width * 0.025)
         n = min(len(benefits), 3)
         block_w = (width - 2 * pad - (n - 1) * block_pad) // n
+        block_h = int(height * 0.088)
 
         for idx, benefit in enumerate(benefits[:n]):
             bx = pad + idx * (block_w + block_pad)
-            by = b_y
-            # Translucent block
             block_overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
             bd = ImageDraw.Draw(block_overlay)
-            bd.rounded_rectangle(
-                [(bx, by), (bx + block_w, by + block_h)],
-                radius=max(6, block_h // 6),
-                fill=(*accent_rgb, 35),
-            )
+            bd.rounded_rectangle([(bx, b_y), (bx + block_w, b_y + block_h)],
+                                  radius=max(8, block_h // 6),
+                                  fill=(*accent_rgb, 30))
             canvas.alpha_composite(block_overlay)
             draw = ImageDraw.Draw(canvas)
 
-            # Benefit text — short, Arabic, centered in block
-            b_shaped = _reshape_arabic(benefit[:20])  # hard cap per block
-            bw = _text_width(draw, b_shaped, b_font)
-            btext_x = bx + (block_w - bw) // 2
-            btext_y = by + (block_h - b_size) // 2
-            draw.text((btext_x, btext_y), b_shaped, font=b_font, fill=(*off_white, 220))
+            bw = _arabic_text_width(draw, benefit[:18], b_font)
+            _draw_arabic_text(draw, benefit[:18], b_font,
+                              bx + (block_w + bw) // 2,
+                              b_y + (block_h - b_size) // 2,
+                              (*text_on_dark, 220))
 
-    # ── CTA ──
-    if cta_ar.strip() or cta_en.strip():
-        cta_text = _reshape_arabic(cta_ar) if cta_ar.strip() else cta_en
+    # ── CTA pill ──
+    cta_text = cta_ar.strip() or cta_en.strip()
+    if cta_text:
         cta_size = max(22, width // 35)
-        cta_font = _load_font(FONT_BOLD, cta_size)
-        cta_w = _text_width(draw, cta_text, cta_font) + int(width * 0.06)
-        cta_h = int(height * 0.06)
-        cta_y = height - int(height * 0.1) - cta_h
+        cta_font = _load_font(FONT_BOLD_PATH, cta_size)
+        cta_w = _arabic_text_width(draw, cta_text, cta_font) + int(width * 0.07)
+        cta_h = int(height * 0.065)
+        cta_y = height - int(height * 0.09) - cta_h
         cta_x = (width - cta_w) // 2
-        draw.rounded_rectangle(
-            [(cta_x, cta_y), (cta_x + cta_w, cta_y + cta_h)],
-            radius=cta_h // 2,
-            fill=(*accent_rgb, 255),
-        )
-        draw.text(
-            (cta_x + (cta_w - _text_width(draw, cta_text, cta_font)) // 2,
-             cta_y + (cta_h - cta_size) // 2),
-            cta_text, font=cta_font, fill=(255, 255, 255, 255),
-        )
+        draw.rounded_rectangle([(cta_x, cta_y), (cta_x + cta_w, cta_y + cta_h)],
+                                radius=cta_h // 2, fill=(*accent_rgb, 255))
+        _draw_arabic_text(draw, cta_text, cta_font,
+                          cta_x + (cta_w + _arabic_text_width(draw, cta_text, cta_font)) // 2,
+                          cta_y + (cta_h - cta_size) // 2, text_on_accent)
 
     # ── Bottom bar ──
-    bar_bottom_h = max(6, height // 120)
-    draw.rectangle([(0, height - bar_bottom_h), (width, height)],
+    draw.rectangle([(0, height - max(6, height // 120)), (width, height)],
                    fill=(*accent_rgb, 255))
 
-    final = canvas.convert("RGB")
     buf = BytesIO()
-    final.save(buf, format="JPEG", quality=92, optimize=True)
+    canvas.convert("RGB").save(buf, format="JPEG", quality=92, optimize=True)
     return buf.getvalue()
 
 
-# ── Public async wrappers ──────────────────────────────────────────────────
+# ── Public async API ───────────────────────────────────────────────────────────
 
 async def render_product_showcase(
     width: int, height: int,
@@ -416,7 +444,6 @@ async def render_product_showcase(
     brand_accent: str = "#4169E1",
     bg_bytes: bytes | None = None,
 ) -> bytes:
-    """Variant A template — product showcase with controlled Arabic typography."""
     return await asyncio.to_thread(
         _render_product_showcase_sync,
         width, height, headline_ar, subhead_ar, cta_ar, cta_en,
@@ -436,7 +463,6 @@ async def render_infographic(
     brand_accent: str = "#4169E1",
     bg_bytes: bytes | None = None,
 ) -> bytes:
-    """Variant B template — infographic with metric hero + benefit blocks."""
     return await asyncio.to_thread(
         _render_infographic_sync,
         width, height, headline_ar, benefits or [], metric_value, metric_label,
@@ -445,36 +471,25 @@ async def render_infographic(
 
 
 async def create_thumbnail(image_bytes: bytes, max_size: int = 400) -> bytes:
-    def _thumb():
+    def _t():
         img = Image.open(BytesIO(image_bytes)).convert("RGB")
         img.thumbnail((max_size, max_size), Image.LANCZOS)
         buf = BytesIO()
         img.save(buf, format="JPEG", quality=88)
         return buf.getvalue()
-    return await asyncio.to_thread(_thumb)
+    return await asyncio.to_thread(_t)
 
 
 async def resize_image(image_bytes: bytes, width: int, height: int) -> bytes:
-    def _resize():
+    def _r():
         img = Image.open(BytesIO(image_bytes)).convert("RGB")
         img = img.resize((width, height), Image.LANCZOS)
         buf = BytesIO()
         img.save(buf, format="JPEG", quality=90)
         return buf.getvalue()
-    return await asyncio.to_thread(_resize)
+    return await asyncio.to_thread(_r)
 
 
-# ── Legacy: kept for compatibility but no longer used in main pipeline ──────
-
-async def apply_text_overlay(
-    image_bytes: bytes,
-    text_ar: str = "",
-    text_en: str = "",
-    arabic_font_url: str | None = None,
-    config: dict | None = None,
-    brand_primary: str = "#0A0A0A",
-    brand_accent: str = "#C9A84C",
-) -> bytes:
-    """Legacy overlay — replaced by render_product_showcase / render_infographic."""
-    # Kept for backwards compatibility; just returns the image unchanged
+# ── Legacy compat (no-op) ──────────────────────────────────────────────────────
+async def apply_text_overlay(image_bytes: bytes, *args, **kwargs) -> bytes:
     return image_bytes
