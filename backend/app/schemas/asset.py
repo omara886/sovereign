@@ -50,5 +50,6 @@ class AssetRead(AssetBase, ORMBase):
     edit_instructions: str | None
     platform_post_id: str | None
     variants: list
+    copy_bilingual: dict | None = None
     created_at: datetime
     updated_at: datetime

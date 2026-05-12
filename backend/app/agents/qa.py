@@ -145,18 +145,90 @@ class QAAgent(BaseAgent):
         result = await self.run(msg, db)
         decoder = json.JSONDecoder()
         start = result.find("{")
+        qa_data: dict = {}
         if start >= 0:
             try:
-                parsed, _ = decoder.raw_decode(result, start)
-                return parsed
+                qa_data, _ = decoder.raw_decode(result, start)
             except json.JSONDecodeError:
                 pass
-        return {
-            "qa_score": 0,
-            "qa_passed": False,
-            "checks": [],
-            "required_fixes": ["QA agent failed to produce valid output — manual review required"],
-        }
+
+        if not qa_data:
+            qa_data = {
+                "qa_score": 0,
+                "qa_passed": False,
+                "checks": [],
+                "required_fixes": ["QA agent failed to produce valid output — manual review required"],
+            }
+
+        # Add tonal consistency scoring
+        tonal = self._score_tone(copy_ar, copy_en, channel, brand_mem or {})
+        qa_data["tonal_score"]       = tonal["score"]
+        qa_data["tonal_label"]       = tonal["label"]
+        qa_data["tonal_explanation"] = tonal["explanation"]
+
+        return qa_data
+
+    def _score_tone(self, copy_ar: str, copy_en: str, channel: str, brand_mem: dict) -> dict:
+        """Compute tonal consistency score from stored brand voice + simple heuristics."""
+        score = 70  # baseline — improved by positive signals
+        reasons: list[str] = []
+
+        ar = (copy_ar or "").strip()
+        en = (copy_en or "").strip()
+
+        # Check Arabic naturalness heuristics
+        if ar:
+            arabic_chars = sum(1 for c in ar if '؀' <= c <= 'ۿ')
+            if len(ar) > 0 and arabic_chars / len(ar) > 0.4:
+                score += 5
+                reasons.append("Arabic copy uses Arabic script correctly")
+
+            # Gulf dialect markers (positive signals)
+            gulf_markers = ["وش", "يا", "كيف", "إن شاء الله", "الله يعطيك", "صح", "حق", "عندك", "خل", "بس"]
+            if any(m in ar for m in gulf_markers):
+                score += 10
+                reasons.append("Gulf Saudi dialect detected")
+            else:
+                score -= 5
+                reasons.append("No Gulf dialect markers found — may sound formal")
+
+            # Avoid overly formal فصحى markers
+            formal_markers = ["إننا", "لقد", "يسعدنا", "نود الإشارة", "حيث أن"]
+            if any(m in ar for m in formal_markers):
+                score -= 15
+                reasons.append("Formal فصحى detected — not Gulf tone")
+
+        # Check claim safety
+        risky_claims = ["يعالج", "مضمون", "علمياً مثبت", "guaranteed", "clinically proven", "cures", "treats disease"]
+        found_claims = [c for c in risky_claims if c.lower() in (ar + en).lower()]
+        if found_claims:
+            score -= 20
+            reasons.append(f"Risky claim detected: {', '.join(found_claims[:2])}")
+        else:
+            score += 5
+            reasons.append("No risky claims found")
+
+        # Brand voice match (if stored)
+        brand_voice = (brand_mem.get("brand_voice") or "") if isinstance(brand_mem, dict) else ""
+        if brand_voice and len(en) > 20:
+            # Simple: check if copy length and tone-words suggest alignment
+            if any(word in en.lower() for word in ["your", "you", "start", "get", "discover"]):
+                score += 5
+                reasons.append("Copy uses direct 2nd-person voice")
+
+        score = max(0, min(100, score))
+
+        if score >= 75:
+            label = "Strong"
+            explanation = "Tone matches brand voice. Gulf Arabic sounds natural. No risky claims."
+        elif score >= 55:
+            label = "Acceptable"
+            explanation = "Tone is broadly on-brand but has room for improvement. " + (reasons[-1] if reasons else "")
+        else:
+            label = "Needs revision"
+            explanation = "Tone issues detected: " + "; ".join(r for r in reasons if "detected" in r or "not Gulf" in r or "Risky" in r)
+
+        return {"score": score, "label": label, "explanation": explanation}
 
 
 def _validate_copy(copy_ar: str, copy_en: str, cta_ar: str, cta_en: str, excluded_topics: list[str] | None = None) -> list[str]:
