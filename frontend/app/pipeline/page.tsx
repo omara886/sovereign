@@ -123,6 +123,7 @@ type AssetCard = {
   thumbnail_url: string | null
   status: string
   qa_score: number | null
+  model_used: string
   created_at: string | null
 }
 
@@ -173,15 +174,20 @@ function AssetTile({ asset }: { asset: AssetCard }) {
           </div>
         )}
 
-        {/* Footer */}
+        {/* Model label under image */}
+        {asset.model_used && (
+          <p className="text-[10px] text-gray-400 truncate mb-1 font-mono">{asset.model_used}</p>
+        )}
+
+        {/* Footer: timestamp + QA + type */}
         <div className="flex items-center justify-between mt-1">
-          <span className="text-xs text-gray-400">{timeAgo(asset.created_at)}</span>
+          <span className="text-[11px] text-gray-400 font-mono">{timeAgo(asset.created_at)}</span>
           {asset.qa_score != null && (
-            <span className={`text-xs font-mono font-medium ${asset.qa_score >= 70 ? 'text-emerald-600' : 'text-red-500'}`}>
-              {asset.qa_score}%
+            <span className={`text-[11px] font-mono font-semibold ${asset.qa_score >= 70 ? 'text-emerald-600' : 'text-red-500'}`}>
+              QA {asset.qa_score}
             </span>
           )}
-          <span className="text-xs text-gray-400 capitalize">{asset.type}</span>
+          <span className="text-[11px] text-gray-400 capitalize">{asset.type}</span>
         </div>
       </div>
     </Link>

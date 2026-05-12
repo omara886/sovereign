@@ -29,6 +29,22 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   ad_creative: 'Ad Creative', ad_copy: 'Ad Copy', email: 'Email',
 }
 
+function timeAgo(iso: string | undefined | null) {
+  if (!iso) return ''
+  const diff = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (diff < 60) return `${diff}m ago`
+  if (diff < 1440) return `${Math.floor(diff / 60)}h ago`
+  if (diff < 10080) return `${Math.floor(diff / 1440)}d ago`
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function formatCreated(iso: string | undefined | null) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
+  })
+}
+
 interface Approval {
   id: string
   asset_id: string | null
@@ -37,13 +53,14 @@ interface Approval {
   created_at: string
 }
 interface DesignVariant {
-  variant: string           // "A" | "B"
-  label: string             // "FAL Option" | "Commercial Option"
+  variant: string
+  label: string
   description: string
   design_url: string | null
   thumbnail_url: string | null
   fal_prompt?: string
   opencodesign_principles?: string[]
+  source?: string
   status: string
   error?: string
 }
@@ -66,6 +83,8 @@ interface Asset {
   tonal_explanation?: string
   variants: DesignVariant[]
   status: string
+  created_at: string
+  updated_at: string
 }
 interface Project { id: string; slug: string; name: string }
 interface WeeklyPlan { id: string; objective: string; funnel_focus: string; total_budget_estimate: number }
@@ -164,14 +183,14 @@ function VariantCard({
         )}
       </div>
 
-      {/* Label */}
+      {/* Label + model */}
       <div className={`px-3 py-2.5 ${selected ? 'bg-indigo-50' : 'bg-white'}`}>
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className={`text-xs font-bold ${selected ? 'text-indigo-700' : 'text-gray-700'}`}>
-            {isCommercial ? '🎬' : '📸'} {variant.label}
-          </span>
-        </div>
-        <p className="text-[11px] text-gray-500 leading-snug line-clamp-2">{variant.description}</p>
+        <span className={`text-xs font-bold ${selected ? 'text-indigo-700' : 'text-gray-700'}`}>
+          {isCommercial ? '🎬' : '📸'} {variant.label}
+        </span>
+        {variant.source && (
+          <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">{variant.source}</p>
+        )}
       </div>
     </button>
   )
@@ -246,10 +265,15 @@ function ApprovalCockpit({
         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: projColor }} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900">{project?.name ?? 'Unknown'}</p>
-          <p className="text-xs text-gray-500">
-            {CHANNEL_LABELS[asset?.channel ?? ''] ?? asset?.channel}
-            {' · '}{ASSET_TYPE_LABELS[asset?.type ?? ''] ?? asset?.type}
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-xs text-gray-500">
+              {CHANNEL_LABELS[asset?.channel ?? ''] ?? asset?.channel}
+              {' · '}{ASSET_TYPE_LABELS[asset?.type ?? ''] ?? asset?.type}
+            </p>
+            {asset?.created_at && (
+              <span className="text-[11px] text-gray-400 font-mono">{formatCreated(asset.created_at)}</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {previewFailed && (
@@ -676,9 +700,14 @@ export default function InboxPage() {
                       <span className="text-sm font-medium text-gray-800 truncate">{proj?.name ?? '—'}</span>
                       <span className="text-xs text-gray-400 ml-auto shrink-0">{CHANNEL_LABELS[asset?.channel ?? ''] ?? asset?.channel ?? '—'}</span>
                     </div>
-                    {asset?.copy_ar && (
-                      <p dir="rtl" className="font-arabic text-xs text-gray-500 truncate mt-1">{asset.copy_ar}</p>
-                    )}
+                    <div className="flex items-center justify-between mt-0.5">
+                      {asset?.copy_ar ? (
+                        <p dir="rtl" className="font-arabic text-xs text-gray-500 truncate flex-1">{asset.copy_ar}</p>
+                      ) : <span />}
+                      {asset?.created_at && (
+                        <span className="text-[10px] text-gray-400 font-mono shrink-0 ml-2">{timeAgo(asset.created_at)}</span>
+                      )}
+                    </div>
                   </button>
                 )
               })}

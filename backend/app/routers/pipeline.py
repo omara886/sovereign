@@ -590,7 +590,7 @@ async def pipeline_board(db: AsyncSession = Depends(get_db)):
     from app.models.project import Project
 
     assets = (await db.execute(
-        select(Asset).order_by(Asset.created_at.desc()).limit(200)
+        select(Asset).order_by(Asset.created_at.desc()).limit(100)
     )).scalars().all()
 
     projects = {str(p.id): p for p in (await db.execute(select(Project))).scalars().all()}
@@ -614,6 +614,15 @@ async def pipeline_board(db: AsyncSession = Depends(get_db)):
     for asset in assets:
         stage = STAGE_MAP.get(asset.status, "Copy")
         proj = projects.get(str(asset.project_id))
+        # Extract model_used from design_prompt JSON
+        model_used = ""
+        try:
+            if asset.design_prompt:
+                dp = json.loads(asset.design_prompt) if isinstance(asset.design_prompt, str) else asset.design_prompt
+                model_used = dp.get("model_used", "")
+        except Exception:
+            pass
+
         card = {
             "id": str(asset.id),
             "project_name": proj.name if proj else "Unknown",
@@ -625,7 +634,8 @@ async def pipeline_board(db: AsyncSession = Depends(get_db)):
             "copy_en": (asset.copy_en or "")[:80],
             "thumbnail_url": asset.design_thumbnail_url,
             "status": asset.status,
-            "qa_score": asset.qa_score,
+            "qa_score": float(asset.qa_score) if asset.qa_score else None,
+            "model_used": model_used[:60] if model_used else "",
             "created_at": asset.created_at.isoformat() if asset.created_at else None,
         }
         if stage in board:
