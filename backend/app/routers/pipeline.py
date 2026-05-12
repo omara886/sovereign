@@ -204,28 +204,24 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 design_data = await design_agent.generate_design(
                     db, project_id, str(asset.id), channel, copy_ar, copy_en, cta_ar, cta_en
                 )
-                from sqlalchemy import update as _upd, cast as _cast
-                from sqlalchemy.dialects.postgresql import JSONB as _JSONB
+                from sqlalchemy.orm.attributes import flag_modified
                 new_variants = list(design_data.get("variants", []))
                 mem_snap = design_data.get("memory_snapshot", {})
                 _log_step(job_id, f"Saving design: {len(new_variants)} variants", "Design Agent")
-                await db.execute(
-                    _upd(Asset).where(Asset.id == asset.id).values(
-                        design_url=design_data.get("design_url"),
-                        design_thumbnail_url=design_data.get("thumbnail_url"),
-                        variants=_cast(json.dumps(new_variants), _JSONB),
-                        design_prompt=json.dumps({
-                            "memory_snapshot": mem_snap,
-                            "model_used": design_data.get("model_used", ""),
-                            "fal_prompt": new_variants[0].get("fal_prompt", "") if new_variants else "",
-                        }),
-                        copy_bilingual=_cast(json.dumps({"cta_ar": cta_ar, "cta_en": cta_en}), _JSONB),
-                    )
-                )
-                asset.design_url = design_data.get("design_url")
+                # Assign Python objects directly — asyncpg handles JSONB natively
+                asset.design_url           = design_data.get("design_url")
                 asset.design_thumbnail_url = design_data.get("thumbnail_url")
+                asset.variants             = new_variants
+                asset.design_prompt        = json.dumps({
+                    "memory_snapshot": mem_snap,
+                    "model_used": design_data.get("model_used", ""),
+                    "fal_prompt": new_variants[0].get("fal_prompt", "") if new_variants else "",
+                })
+                asset.copy_bilingual = {"cta_ar": cta_ar, "cta_en": cta_en}
+                # Force SQLAlchemy to mark JSONB columns as dirty
+                flag_modified(asset, "variants")
+                flag_modified(asset, "copy_bilingual")
                 await db.commit()
-                await db.refresh(asset)
 
                 log(f"QA check ({i+1}/{len(tactics)})...", "QA Agent", ["BrandMemory.donts", "ProjectMemory.excluded_topics", "RejectedExamples"], ["Gulf Arabic validated", "No forbidden phrases", "Score / 100"])
                 qa_result = await qa_agent.check_asset(
