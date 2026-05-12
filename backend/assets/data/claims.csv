@@ -1,0 +1,2 @@
+claim_id,numeric_value,claim_text,source_url,source_title,source_date,verifier,verified_date,flagged,note
+therapia-001,8,"تقييمك الصحي الكامل في ٨ دقايق",,Therapia product spec,,NULL,,true,Source URL needed — internal product claim unverified

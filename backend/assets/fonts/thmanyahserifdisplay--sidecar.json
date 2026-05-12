@@ -1,0 +1,21 @@
+{
+  "family": "Thmanyah Serif Display",
+  "weights_available": [
+    "Black",
+    "Bold",
+    "Medium",
+    "Regular",
+    "Light"
+  ],
+  "arabic_basic_glyphs": true,
+  "arabic_presentation_forms": true,
+  "GSUB_arabic_shaping": true,
+  "raqm_safe": true,
+  "preferred_render_path": "RAQM (ImageFont.Layout.RAQM + direction=rtl + language=ar)",
+  "fallback_path": "arabic_reshaper + python-bidi (only when RAQM unavailable)",
+  "conflict_note": "Do NOT combine RAQM + reshaper in same path",
+  "license": "assets/fonts/LICENSE.pdf",
+  "last_audited": "2026-05-13",
+  "audited_by": "sovereign-asset-auditor",
+  "compliance_score": 100
+}
