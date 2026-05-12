@@ -204,22 +204,28 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 design_data = await design_agent.generate_design(
                     db, project_id, str(asset.id), channel, copy_ar, copy_en, cta_ar, cta_en
                 )
-                from sqlalchemy.orm.attributes import flag_modified
-                asset.design_url           = design_data.get("design_url")
-                asset.design_thumbnail_url = design_data.get("thumbnail_url")
-                # Save both variants + memory snapshot
+                from sqlalchemy import update as sql_update
                 new_variants = list(design_data.get("variants", []))
-                asset.variants = new_variants
-                flag_modified(asset, "variants")  # force SQLAlchemy to detect JSONB change
-                asset.design_prompt = json.dumps({
-                    "memory_snapshot": design_data.get("memory_snapshot", {}),
-                    "model_used":      design_data.get("model_used", ""),
-                    "fal_prompt":      (new_variants or [{}])[0].get("fal_prompt", "") if new_variants else "",
-                })
-                # Store CTAs in copy_bilingual for approval display
-                asset.copy_bilingual = {"cta_ar": cta_ar, "cta_en": cta_en}
-                flag_modified(asset, "copy_bilingual")
+                mem_snap = design_data.get("memory_snapshot", {})
+                # Direct SQL UPDATE for JSONB fields — ORM change detection unreliable for JSONB
+                await db.execute(
+                    sql_update(Asset).where(Asset.id == asset.id).values(
+                        design_url=design_data.get("design_url"),
+                        design_thumbnail_url=design_data.get("thumbnail_url"),
+                        variants=new_variants,
+                        design_prompt=json.dumps({
+                            "memory_snapshot": mem_snap,
+                            "model_used": design_data.get("model_used", ""),
+                            "fal_prompt": new_variants[0].get("fal_prompt", "") if new_variants else "",
+                        }),
+                        copy_bilingual={"cta_ar": cta_ar, "cta_en": cta_en},
+                    )
+                )
+                # Keep ORM object in sync
+                asset.design_url = design_data.get("design_url")
+                asset.design_thumbnail_url = design_data.get("thumbnail_url")
                 await db.commit()
+                await db.refresh(asset)
 
                 log(f"QA check ({i+1}/{len(tactics)})...", "QA Agent", ["BrandMemory.donts", "ProjectMemory.excluded_topics", "RejectedExamples"], ["Gulf Arabic validated", "No forbidden phrases", "Score / 100"])
                 qa_result = await qa_agent.check_asset(
