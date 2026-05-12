@@ -207,6 +207,7 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 from sqlalchemy import update as sql_update
                 new_variants = list(design_data.get("variants", []))
                 mem_snap = design_data.get("memory_snapshot", {})
+                _log_step(job_id, f"DEBUG variants={len(new_variants)} design_err={design_data.get('error','none')[:50]}", "Pipeline")
                 # Direct SQL UPDATE for JSONB fields — ORM change detection unreliable for JSONB
                 await db.execute(
                     sql_update(Asset).where(Asset.id == asset.id).values(
