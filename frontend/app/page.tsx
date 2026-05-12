@@ -1,7 +1,5 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import Aurora from '@/components/react-bits/Aurora'
-import BlurText from '@/components/react-bits/BlurText'
 import AnimatedContent from '@/components/react-bits/AnimatedContent'
 import CountUp from '@/components/react-bits/CountUp'
 import SpotlightCard from '@/components/react-bits/SpotlightCard'
@@ -57,6 +55,22 @@ type WeeklySummaryItem = {
 
 const JOB_KEY = 'sovereign_active_job'
 
+// Human-readable labels for internal enums
+const GOAL_LABELS: Record<string, string> = {
+  app_downloads_and_health_assessments_completed: 'App downloads + health assessments',
+  leads_and_demo_requests: 'Leads & demo requests',
+  waitlist_and_paying_customers: 'Waitlist & paying customers',
+  followers_and_signups: 'Followers & signups',
+}
+
+
+const PLAN_STATUS_LABELS: Record<string, string> = {
+  pending_approval: 'Awaiting plan approval',
+  approved: 'Plan approved',
+  executing: 'Generating content',
+  done: 'Complete',
+}
+
 function splitLearnings(text: string) {
   return text
     .replace(/\r/g, '')
@@ -66,56 +80,77 @@ function splitLearnings(text: string) {
     .slice(0, 3)
 }
 
-function TodaysFocus({
+function CommandBar({
   pendingApprovals,
   totalGenerated,
   loading,
+  pipelineRunning,
 }: {
   pendingApprovals: number
   totalGenerated: number
   loading: boolean
+  pipelineRunning: boolean
 }) {
   if (loading) return null
 
+  if (pipelineRunning) {
+    return (
+      <div className="mb-5 flex items-center gap-3 px-4 py-3 rounded-lg bg-indigo-50 border border-indigo-200">
+        <Loader2 size={15} className="text-indigo-600 animate-spin shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-indigo-900">Pipeline is running</p>
+          <p className="text-xs text-indigo-600 mt-0.5">Generating content — check the Lab for live progress</p>
+        </div>
+        <Link href="/lab" className="shrink-0 text-xs font-semibold text-indigo-700 border border-indigo-300 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors">
+          View Live →
+        </Link>
+      </div>
+    )
+  }
+
   if (pendingApprovals > 0) {
     return (
-      <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-xl bg-[rgba(201,168,76,0.08)] border border-[rgba(201,168,76,0.2)]">
-          <div className="w-10 h-10 rounded-full bg-[#C9A84C] text-[#0A0A0A] font-bold text-sm flex items-center justify-center shrink-0">
-            {pendingApprovals}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">
-              {pendingApprovals} asset{pendingApprovals > 1 ? 's' : ''} waiting for approval
-            </p>
-            <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-0.5">
-              Review and approve to schedule publishing
-            </p>
-          </div>
-          <Link href="/inbox" className="shrink-0 font-['IBM_Plex_Sans'] text-sm font-bold text-[#0A0A0A] bg-[#C9A84C] px-4 py-2.5 rounded-xl min-h-[44px] flex items-center hover:bg-[#E8C97A] transition-colors">
-            Review →
-          </Link>
+      <div className="mb-5 flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200">
+        <div className="w-7 h-7 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center shrink-0">
+          {pendingApprovals}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-amber-900">
+            {pendingApprovals} item{pendingApprovals > 1 ? 's' : ''} waiting for your approval
+          </p>
+          <p className="text-xs text-amber-700 mt-0.5">Review each creative, check the safety checklist, then approve to publish</p>
+        </div>
+        <Link href="/inbox" className="shrink-0 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 px-3 py-2 rounded-lg transition-colors min-h-[36px] flex items-center">
+          Review Now →
+        </Link>
       </div>
     )
   }
 
   if (totalGenerated === 0) {
     return (
-      <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]">
-        <div className="w-10 h-10 rounded-full bg-[rgba(201,168,76,0.15)] border border-[rgba(201,168,76,0.3)] text-[#C9A84C] font-bold flex items-center justify-center shrink-0 text-sm">
-          1
-        </div>
+      <div className="mb-5 flex items-center gap-3 px-4 py-3 rounded-lg bg-indigo-50 border border-indigo-200">
+        <div className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shrink-0">1</div>
         <div className="flex-1 min-w-0">
-          <p className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">Start with Therapia</p>
-          <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.45)] mt-0.5">Upload logo → generate plan → approve content → publishes automatically</p>
+          <p className="text-sm font-semibold text-indigo-900">Set up Therapia to get started</p>
+          <p className="text-xs text-indigo-600 mt-0.5">Write brand brief → run pipeline → approve content → publishes automatically</p>
         </div>
-        <Link href="/projects/therapia" className="shrink-0 font-['IBM_Plex_Sans'] text-xs text-[#C9A84C] border border-[rgba(201,168,76,0.3)] px-4 py-2.5 rounded-xl min-h-[44px] flex items-center hover:bg-[rgba(201,168,76,0.08)] transition-colors">
-          Set up →
+        <Link href="/projects/therapia" className="shrink-0 text-xs font-semibold text-indigo-700 border border-indigo-300 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors">
+          Set Up →
         </Link>
       </div>
     )
   }
 
-  return null
+  return (
+    <div className="mb-5 flex items-center gap-3 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200">
+      <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+      <p className="text-sm text-emerald-800">All clear — no actions needed right now</p>
+      <Link href="/pipeline" className="ml-auto shrink-0 text-xs text-emerald-700 border border-emerald-300 px-3 py-2 rounded-lg hover:bg-emerald-100 transition-colors">
+        View Pipeline →
+      </Link>
+    </div>
+  )
 }
 
 export default function DashboardPage() {
@@ -256,27 +291,28 @@ export default function DashboardPage() {
   const isNewUser = !metricsLoading && totalGenerated === 0
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]">
-      <Aurora className="pt-[calc(3.5rem+env(safe-area-inset-top))] pb-10 px-4 md:px-8">
+    <div className="min-h-screen bg-[#FAFAFA]">
+      {/* Page header — clean, no aurora on light theme */}
+      <div className="bg-white border-b border-gray-200 pt-[calc(3rem+env(safe-area-inset-top))] pb-5 px-6">
         <div className="max-w-5xl mx-auto">
-          <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.4)] mb-2">Sovereign</p>
-          <h1 className="font-['Cormorant_Garamond'] text-4xl md:text-6xl text-[#F8F6F1] mb-2">
-            <BlurText text="Welcome back, Omar" delay={100} />
-          </h1>
-          <p className="font-['IBM_Plex_Sans'] text-[rgba(248,246,241,0.5)] text-base mt-2">
-            Your autonomous marketing command center.
-          </p>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Sovereign</p>
+          <h1 className="text-2xl font-bold text-gray-900">Command Center</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Autonomous marketing OS for Therapia, Qawwi, ProductBench, SahmAlgo</p>
         </div>
-      </Aurora>
+      </div>
 
-      <div className="max-w-5xl mx-auto px-4 md:px-8 pb-[7rem]">
+      <div className="max-w-5xl mx-auto px-6 pb-[7rem] pt-5">
         {metricsError ? (
-          <AnimatedContent delay={80}>
-            <FetchError message={metricsError} onRetry={loadMetrics} />
-          </AnimatedContent>
+          <FetchError message={metricsError} onRetry={loadMetrics} />
         ) : null}
 
-        <TodaysFocus pendingApprovals={pendingApprovals} totalGenerated={totalGenerated} loading={metricsLoading} />
+        {/* What needs Omar — command bar */}
+        <CommandBar
+          pendingApprovals={pendingApprovals}
+          totalGenerated={totalGenerated}
+          loading={metricsLoading}
+          pipelineRunning={isRunning}
+        />
 
         {!isNewUser && (
           <AnimatedContent delay={100}>
@@ -397,7 +433,7 @@ export default function DashboardPage() {
               ) : status?.plan_status === 'approved' || status?.plan_status === 'executing' ? (
                 <Badge variant="success">Ready</Badge>
               ) : (
-                <Badge variant="default">{status?.plan_status || project.status}</Badge>
+                <Badge variant="default">{PLAN_STATUS_LABELS[status?.plan_status ?? ''] ?? status?.plan_status ?? project.status}</Badge>
               )
               const cardTone = projectIsRunning
                 ? 'border-[rgba(201,168,76,0.22)] bg-[linear-gradient(180deg,rgba(201,168,76,0.08),rgba(255,255,255,0.02))]'
@@ -432,7 +468,7 @@ export default function DashboardPage() {
                     <div className="flex items-start justify-between mb-2 gap-3">
                       <div>
                         <h3 className="font-['IBM_Plex_Sans'] text-base text-[#F8F6F1] font-semibold">{project.name}</h3>
-                        <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mt-0.5">{project.primary_goal}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{GOAL_LABELS[project.primary_goal] ?? project.primary_goal}</p>
                         <p className="font-['IBM_Plex_Sans'] text-[11px] text-[rgba(248,246,241,0.55)] mt-2">{helperText}</p>
                       </div>
                       {statusBadge}

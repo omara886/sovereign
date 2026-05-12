@@ -66,7 +66,7 @@ export default function ProjectPage() {
   const slug = params.id as string
   const projectName = slug.charAt(0).toUpperCase() + slug.slice(1)
 
-  const [tab, setTab] = useState('Assets')
+  const [tab, setTab] = useState('Pipeline')
   const [activeType, setActiveType] = useState('logo')
   const [uploads, setUploads] = useState<Array<{ type: string; url: string; name: string }>>([])
   const [memory, setMemory] = useState<Record<string, unknown> | null>(null)
