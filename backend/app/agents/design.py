@@ -1,8 +1,15 @@
 """
-Design Agent — Two commercial app-marketing variants per asset:
-  Variant A — product-in-use campaign (person using the app)
-  Variant B — outcome/results campaign (person after using the app)
-Both use commercial performance-marketing direction, not cinematic art.
+Design Agent — Template-driven commercial marketing renderer.
+
+Architecture:
+  1. DeepSeek writes a SHORT fal.ai prompt for BACKGROUND ONLY (no text, no people preferred)
+  2. fal.ai generates background atmosphere/scene
+  3. Pillow templates compose the final design:
+     - Variant A: Product Showcase (brand frame, Arabic headline, CTA)
+     - Variant B: Infographic Outcome (metric hero, benefit blocks, Arabic headline)
+
+Arabic text is NEVER baked into fal.ai prompts.
+Arabic is rendered by the app with Thmanyah font + bidi + controlled line lengths.
 """
 import asyncio
 import json
@@ -11,58 +18,51 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.fal_tools import generate_image_fal
-from app.tools.image_tools import apply_text_overlay, create_thumbnail
+from app.tools.image_tools import render_product_showcase, render_infographic, create_thumbnail
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 from app.tools.r2_tools import upload_to_r2
 
-# ── Variant A: product-in-use app-marketing campaign ────────────────────────
+# ── Variant A background prompt director ────────────────────────────────────
 
-ART_DIRECTOR_PROMPT = """You are a senior commercial art director for Saudi/Gulf app-marketing campaigns.
-You produce fal.ai prompts that generate world-class commercial app-marketing assets.
+BACKGROUND_A_PROMPT = """You are a commercial background art director.
+Generate a fal.ai prompt for a BACKGROUND IMAGE ONLY — no text, no typography.
+The background will have Arabic headline and product text overlaid by the app.
 
-DIRECTION — commercial growth campaign, NOT cinematic art:
-- Saudi/Gulf professional actively using a phone or health app in real context
-- Clean performance-marketing layout: strong person + clear context + copy zone
-- Looks like a serious health-tech product launch campaign (think: Headspace, MyFitnessPal)
-- No abstract metaphors, no AI movie stills, no decorative wellness posters
-- Modern Saudi context: clean apartment, office, or urban lifestyle
-
-REQUIRED:
-- Real person with phone/app visible
-- Clear bottom 35% gradient zone for Arabic text overlay
-- Brand accent color as atmosphere, not decoration
-- Benefit visible in the scene (person engaged, measurable action)
-
-OUTPUT: fal.ai image prompt only. Max 120 words. No explanation. No quotes."""
-
-# ── Variant B: commercial marketing campaign director ──────────────────────
-
-COMMERCIAL_DIRECTOR_PROMPT = """You are a senior performance marketing creative director for Saudi/Gulf digital products.
-You create fal.ai prompts for app-install and conversion campaigns.
-
-DIRECTION — outcome/results campaign, distinct from Variant A which shows product-in-use:
-- Show a Saudi/Gulf person AFTER using the product: confident, healthier, more successful
-- Feature the transformation or result — not the app UI, the human outcome
-- Professional advertising photography: intentional lighting, clean environment, premium quality
-- Think: Nike Training Club campaign, Headspace results ad, health app success story — Gulf version
-- High-contrast composition: hero person + clean background + aspirational energy
+BACKGROUND DIRECTION (Variant A — product-in-context):
+- Clean, premium environment: modern Saudi apartment, bright office, or minimalist setting
+- Subtle depth — slightly blurred background, sharp foreground object
+- Brand accent color as ambient light source
+- Optional: person's hands holding a phone (no screen visible, no text)
+- Generates visual depth and warmth without competing with the text overlay
 
 REQUIRED:
-- Different composition from Variant A (A = using app, B = result of using app)
-- Saudi Gulf person in aspirational but realistic setting
-- Bottom 35% clear and dark for Arabic copy overlay
-- No app screens, no phones — focus on the human transformation
+- NO text, numbers, letters, or typography anywhere in the image
+- NO cluttered backgrounds
+- Bottom 40% must be available for text (dark gradient or clean dark area)
+- Premium commercial photography quality
 
-OUTPUT: fal.ai prompt only. Max 120 words. No explanation."""
+OUTPUT: fal.ai prompt for background only. Max 100 words. No explanation."""
 
-PLATFORM_DIMENSIONS = {
-    "instagram_post":    (1080, 1080),
-    "instagram_portrait":(1080, 1350),
-    "instagram_story":   (1080, 1920),
-    "linkedin_post":     (1200, 627),
-    "x_post":            (1600, 900),
-    "google_display":    (1200, 628),
-}
+# ── Variant B background prompt director ────────────────────────────────────
+
+BACKGROUND_B_PROMPT = """You are a commercial background art director.
+Generate a fal.ai prompt for a BACKGROUND IMAGE ONLY — no text, no numbers.
+The background will have Arabic metrics, headline, and benefit blocks overlaid.
+
+BACKGROUND DIRECTION (Variant B — abstract/data-inspired):
+- Abstract geometric or data-visualization inspired visual
+- Clean, dark or brand-color background with subtle depth
+- Soft gradient, abstract shapes, or technology-inspired pattern
+- Premium digital product marketing aesthetic
+- No people, no real-world scenes
+
+REQUIRED:
+- NO text, numbers, letters, or typography anywhere in the image
+- Needs to work as a clean canvas for infographic overlays
+- Brand primary color should dominate
+- Premium quality, not generic stock
+
+OUTPUT: fal.ai prompt only. Max 100 words. No explanation."""
 
 PLATFORM_DIMS_FAL = {
     "instagram_post":    {"width": 1080, "height": 1080},
@@ -73,13 +73,13 @@ PLATFORM_DIMS_FAL = {
     "google_display":    {"width": 1200, "height": 628},
 }
 
-# Open CoDesign commercial principles applied to Variant B
+# Open CoDesign principles used in the template renderer
 OPENCODESIGN_PRINCIPLES = [
-    "craft-polish.md — dramatic lighting, saturated brand colors, high production value",
-    "frontend-design-anti-slop.md — no generic stock photo, no weak composition",
-    "artifact-composition.md — benefit-focused composition, emotional outcome visible",
-    "responsive-layout.md — design survives all platform exports cleanly",
-    "Brand refs: Nike, Apple, Starbucks KSA — aspirational, conversion-grade campaign",
+    "artifact-composition.md — structured brand template, not raw prompt output",
+    "craft-polish.md — controlled spacing, contrast, hierarchy",
+    "frontend-design-anti-slop.md — no generic AI posters, no baked Arabic text",
+    "editorial-typography.jsx — Thmanyah Arabic, RTL, bidi, max 2 headline lines",
+    "accessibility-states.md — contrast validated, safe zones enforced",
 ]
 
 
@@ -87,90 +87,84 @@ class DesignAgent(BaseAgent):
     MODEL = DEEPSEEK
 
     def __init__(self):
-        super().__init__(system_prompt=ART_DIRECTOR_PROMPT, tools=[], max_tokens=200)
-        self._commercial_agent = BaseAgent(
-            system_prompt=COMMERCIAL_DIRECTOR_PROMPT, tools=[], max_tokens=200
+        super().__init__(system_prompt=BACKGROUND_A_PROMPT, tools=[], max_tokens=150)
+        self._bg_b_agent = BaseAgent(
+            system_prompt=BACKGROUND_B_PROMPT, tools=[], max_tokens=150
         )
 
-    async def _get_prompt(
-        self, agent: BaseAgent, copy_en: str, copy_ar: str, channel: str,
-        brand_colors: dict, brand_style: str, image_style: str, funnel_stage: str,
-        brand_brief: str = "", dos: list | None = None, variant: str = "A",
-    ) -> str:
-        primary    = brand_colors.get("primary",    "#0A0A0A")
-        accent     = brand_colors.get("accent",     "#C9A84C")
-        secondary  = brand_colors.get("secondary",  "")
-        background = brand_colors.get("background", primary)
-        dos_text   = "; ".join((dos or [])[:3])
-
-        if variant == "A":
-            msg = (
-                f"Platform: {channel} | Funnel: {funnel_stage}\n"
-                f"BRAND COLORS: primary={background}, accent={accent}, secondary={secondary or 'none'}\n"
-                f"VISUAL STYLE: {brand_style}\nIMAGE STYLE: {image_style}\n"
-            )
-        else:
-            # Variant B: commercial campaign — bold advertising energy, benefit-focused
-            msg = (
-                f"Platform: {channel} | Funnel: {funnel_stage}\n"
-                f"BRAND COLORS: primary={background}, accent={accent}\n"
-                f"BRAND STYLE: {brand_style}\n"
-                "DIRECTION: Bold commercial campaign visual. Show the benefit or outcome visually. "
-                "High production value, dramatic composition, conversion-grade advertising energy.\n"
-            )
-
-        if brand_brief:
-            msg += f"BRAND BRIEF: {brand_brief[:300]}\n"
-        if dos_text:
-            msg += f"BRAND DOS: {dos_text}\n"
-        msg += (
-            f"ARABIC COPY: {copy_ar[:100]}\nENGLISH COPY: {copy_en[:120]}\n\n"
-            "Generate the fal.ai prompt now."
+    async def _get_bg_prompt(self, agent: BaseAgent, copy_en: str, brand_colors: dict,
+                              brand_style: str, funnel_stage: str, brief: str) -> str:
+        primary = brand_colors.get("primary", "#001A4D")
+        accent  = brand_colors.get("accent",  "#4169E1")
+        msg = (
+            f"Brand colors: primary={primary}, accent={accent}\n"
+            f"Visual style: {brand_style}\nFunnel: {funnel_stage}\n"
+            f"Campaign context: {copy_en[:100]}\n"
         )
+        if brief:
+            msg += f"Brand brief: {brief[:200]}\n"
+        msg += "Generate the fal.ai BACKGROUND prompt now. No text in image."
         try:
-            prompt = await agent.run(msg, None)  # type: ignore
-            return prompt.strip().strip('"').strip("'")
+            p = await agent.run(msg, None)  # type: ignore
+            return p.strip().strip('"').strip("'")
         except Exception:
-            if variant == "A":
-                return (
-                    f"Commercial app-marketing campaign, {brand_style} Saudi context, {image_style}, "
-                    f"accent {accent} as rim light, background {background}, "
-                    f"depth of field, clear bottom 35% for text, premium quality"
-                )
-            else:
-                return (
-                    f"Bold commercial advertising campaign, Saudi market, high production value, "
-                    f"brand colors {background} and {accent}, dramatic lighting, confident person "
-                    f"achieving a goal or using the product, aspirational Gulf lifestyle, "
-                    f"conversion-grade composition, clear bottom 35% for text, premium ad quality, no text in image"
-                )
+            return (
+                f"Abstract premium background, brand color {primary} dominant, "
+                f"soft geometric shapes, dark gradient, no text, no people, "
+                f"commercial app-marketing aesthetic, high quality photography"
+            )
 
-    def _build_memory_snapshot(
-        self, brand_mem, project_mem, channel: str, funnel_stage: str
-    ) -> dict:
-        """Record which memory fields were populated — shown in approval as proof."""
-        snap: dict = {}
+    def _build_memory_snapshot(self, brand_mem, project_mem, channel: str) -> dict:
+        snap: dict = {"channel": channel, "template_engine": "Pillow deterministic"}
         if brand_mem:
-            snap["brand_voice"]   = bool(brand_mem.brand_voice)
-            snap["colors"]        = bool(brand_mem.color_palette)
-            snap["visual_style"]  = bool(brand_mem.visual_style)
-            snap["dos"]           = len(brand_mem.dos or [])
-            snap["donts"]         = len(brand_mem.donts or [])
-            snap["is_provisional"]= brand_mem.is_provisional
+            snap["brand_voice"]    = bool(brand_mem.brand_voice)
+            snap["colors"]         = bool(brand_mem.color_palette)
+            snap["visual_style"]   = bool(brand_mem.visual_style)
+            snap["dos"]            = len(brand_mem.dos or [])
+            snap["donts"]          = len(brand_mem.donts or [])
+            snap["is_provisional"] = brand_mem.is_provisional
         if project_mem:
-            snap["brand_brief"]        = bool(getattr(project_mem, "brand_brief", None))
-            snap["icp"]                = bool(project_mem.icp)
-            snap["positioning"]        = bool(project_mem.positioning)
-            snap["tone"]               = bool(project_mem.tone)
-            snap["funnel_goals"]       = bool(project_mem.funnel_goals)
-            snap["approved_examples"]  = len(project_mem.approved_examples or [])
-            snap["rejected_examples"]  = len(project_mem.rejected_examples or [])
-            snap["excluded_topics"]    = len(
+            snap["brand_brief"]       = bool(getattr(project_mem, "brand_brief", None))
+            snap["icp"]               = bool(project_mem.icp)
+            snap["positioning"]       = bool(project_mem.positioning)
+            snap["tone"]              = bool(project_mem.tone)
+            snap["funnel_goals"]      = bool(project_mem.funnel_goals)
+            snap["approved_examples"] = len(project_mem.approved_examples or [])
+            snap["rejected_examples"] = len(project_mem.rejected_examples or [])
+            snap["excluded_topics"]   = len(
                 (project_mem.constraints or {}).get("excluded_topics", [])
             )
-        snap["channel"]       = channel
-        snap["funnel_stage"]  = funnel_stage
         return snap
+
+    def _extract_metric(self, copy_ar: str) -> tuple[str, str]:
+        """Extract a key metric from the Arabic copy (e.g., '٨' + 'دقائق')."""
+        import re
+        # Look for Arabic numerals or Eastern Arabic numerals
+        patterns = [
+            (r'(\d+)\s*(دقيقة|دقائق|ثانية|ساعة)', lambda m: (m.group(1), m.group(2))),
+            (r'([٠-٩]+)\s*(دقيقة|دقائق)', lambda m: (m.group(1), m.group(2))),
+            (r'(\d+)\s*(خطوة|خطوات|يوم|أيام|أسبوع)', lambda m: (m.group(1), m.group(2))),
+        ]
+        for pattern, extractor in patterns:
+            m = re.search(pattern, copy_ar)
+            if m:
+                try:
+                    val, label = extractor(m)
+                    return val, label
+                except Exception:
+                    pass
+        return "٨", "دقائق"  # default Therapia key metric
+
+    def _extract_benefits(self, copy_ar: str, copy_en: str) -> list[str]:
+        """Extract 3 short benefit phrases for the infographic blocks."""
+        # Try to split copy into short phrases
+        import re
+        phrases = re.split(r'[.،\n]', copy_ar)
+        clean = [p.strip() for p in phrases if len(p.strip()) > 3 and len(p.strip()) < 25]
+        if len(clean) >= 3:
+            return clean[:3]
+        # Fallback: generic Therapia benefits
+        return ["تقييم صحي شامل", "٨ دقائق فقط", "خطة شخصية"]
 
     async def generate_design(
         self, db: AsyncSession, project_id: str, asset_id: str,
@@ -182,87 +176,109 @@ class DesignAgent(BaseAgent):
             project_mem = await get_project_memory(db, project_id)
 
             colors    = (brand_mem.color_palette or {}) if brand_mem else {}
-            style     = (brand_mem.visual_style  or "modern professional") if brand_mem else "modern professional"
-            img_style = (brand_mem.image_style   or "commercial app-marketing photography") if brand_mem else "commercial app-marketing"
-            dos       = (brand_mem.dos or []) if brand_mem else []
-            accent    = colors.get("accent", colors.get("primary", "#4169E1"))
-            primary_color = colors.get("primary", colors.get("background", "#001A4D"))
-
-            brief = getattr(project_mem, "brand_brief", None) or "" if project_mem else ""
+            style     = (brand_mem.visual_style or "commercial app-marketing") if brand_mem else "commercial app-marketing"
+            primary   = colors.get("primary", colors.get("background", "#001A4D"))
+            accent    = colors.get("accent",  colors.get("secondary",  "#4169E1"))
+            brief     = getattr(project_mem, "brand_brief", None) or "" if project_mem else ""
 
             platform_key = channel.replace("-", "_").replace(" ", "_") + "_post"
             fal_dims = PLATFORM_DIMS_FAL.get(platform_key, {"width": 1080, "height": 1080})
+            w, h = fal_dims["width"], fal_dims["height"]
 
-            text_ar = f"{copy_ar}\n{cta_ar}".strip() if copy_ar or cta_ar else ""
-            text_en = f"{copy_en}\n{cta_en}".strip() if copy_en or cta_en else ""
+            memory_snapshot = self._build_memory_snapshot(brand_mem, project_mem, channel)
 
-            memory_snapshot = self._build_memory_snapshot(brand_mem, project_mem, channel, "awareness")
-
-            # ── Generate prompts sequentially (avoid asyncio CancelledError) ──
-            prompt_a = await self._get_prompt(
-                self, copy_en, copy_ar, channel, colors, style, img_style,
-                "awareness", brief, dos, variant="A"
+            # ── Background prompts (no Arabic text) ──
+            bg_prompt_a = await self._get_bg_prompt(
+                self, copy_en, colors, style, "awareness", brief
             )
-            prompt_b = await self._get_prompt(
-                self._commercial_agent, copy_en, copy_ar, channel, colors, style, img_style,
-                "awareness", brief, dos, variant="B"
+            bg_prompt_b = await self._get_bg_prompt(
+                self._bg_b_agent, copy_en, colors, style, "awareness", brief
             )
 
-            async def _generate_one(prompt: str, variant_label: str, vid_suffix: str) -> dict:
+            # ── Extract infographic data from copy ──
+            metric_val, metric_lbl = self._extract_metric(copy_ar)
+            benefits = self._extract_benefits(copy_ar, copy_en)
+
+            async def _make_variant_a() -> dict:
                 try:
-                    img_bytes = await generate_image_fal(
-                        prompt, "fal-ai/flux/schnell", fal_dims["width"], fal_dims["height"]
+                    bg = await generate_image_fal(
+                        bg_prompt_a + " NO TEXT NO TYPOGRAPHY",
+                        "fal-ai/flux/schnell", w, h
                     )
-                    with_text = await apply_text_overlay(
-                        img_bytes, text_ar, text_en,
-                        brand_primary=primary_color, brand_accent=accent,
+                    final_img = await render_product_showcase(
+                        w, h,
+                        headline_ar=" ".join(copy_ar.split()[:6]),  # max 6 words for readable Arabic headline
+                        subhead_ar=cta_ar[:40] if cta_ar else "",
+                        cta_ar=cta_ar[:25] if cta_ar else "",
+                        cta_en=cta_en[:25] if cta_en else "",
+                        brand_primary=primary,
+                        brand_accent=accent,
+                        bg_bytes=bg,
                     )
-                    thumb = await create_thumbnail(with_text)
-                    vid   = f"{asset_id}_{vid_suffix}"
-                    durl  = await upload_to_r2(with_text, f"{vid}.png",       "image/png")
+                    thumb = await create_thumbnail(final_img)
+                    vid   = f"{asset_id}_vA"
+                    durl  = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
                     turl  = await upload_to_r2(thumb,     f"{vid}_thumb.jpg", "image/jpeg")
                     return {
-                        "variant":       variant_label,
-                        "design_url":    durl,
-                        "thumbnail_url": turl,
-                        "fal_prompt":    prompt[:200],
-                        "status":        "ok",
+                        "variant": "A", "label": "Product Showcase",
+                        "description": "Brand-controlled template: Arabic headline + CTA + product frame. Thmanyah font, RTL layout, brand colors.",
+                        "design_url": durl, "thumbnail_url": turl,
+                        "bg_prompt": bg_prompt_a, "status": "ok",
+                        "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
                     }
-                except BaseException as exc:  # catch CancelledError (Python 3.13 BaseException)
-                    return {"variant": variant_label, "error": str(exc), "status": "failed"}
+                except BaseException as exc:
+                    return {"variant": "A", "label": "Product Showcase",
+                            "error": str(exc), "status": "failed"}
 
-            # Run sequentially — avoids CancelledError propagation in asyncio.gather
-            variant_a_data = await _generate_one(prompt_a, "A", "vA")
-            variant_b_data = await _generate_one(prompt_b, "B", "vB")
+            async def _make_variant_b() -> dict:
+                try:
+                    bg = await generate_image_fal(
+                        bg_prompt_b + " NO TEXT NO TYPOGRAPHY ABSTRACT ONLY",
+                        "fal-ai/flux/schnell", w, h
+                    )
+                    final_img = await render_infographic(
+                        w, h,
+                        headline_ar=" ".join(copy_ar.split()[:6]),  # max 6 words for readable Arabic headline
+                        benefits=benefits,
+                        metric_value=metric_val,
+                        metric_label=metric_lbl,
+                        cta_ar=cta_ar[:25] if cta_ar else "",
+                        cta_en=cta_en[:25] if cta_en else "",
+                        brand_primary=primary,
+                        brand_accent=accent,
+                        bg_bytes=bg,
+                    )
+                    thumb = await create_thumbnail(final_img)
+                    vid   = f"{asset_id}_vB"
+                    durl  = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
+                    turl  = await upload_to_r2(thumb,     f"{vid}_thumb.jpg", "image/jpeg")
+                    return {
+                        "variant": "B", "label": "Infographic Outcome",
+                        "description": "Brand-controlled template: metric hero + benefit blocks + Arabic headline. No text baked in fal.ai.",
+                        "design_url": durl, "thumbnail_url": turl,
+                        "bg_prompt": bg_prompt_b, "status": "ok",
+                        "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
+                    }
+                except BaseException as exc:
+                    return {"variant": "B", "label": "Infographic Outcome",
+                            "error": str(exc), "status": "failed"}
 
-            # Variant A is primary; fallback to B if A failed
-            primary_variant = variant_a_data if variant_a_data["status"] == "ok" else variant_b_data
-            first_url   = primary_variant.get("design_url")
-            first_thumb = primary_variant.get("thumbnail_url")
+            variant_a = await _make_variant_a()
+            variant_b = await _make_variant_b()
 
-            variants = [
-                {
-                    **variant_a_data,
-                    "label":       "Campaign Variant A",
-                    "description": "Product-in-use: Saudi professional using the app, benefit visible, app context clear",
-                    "source":      "fal-ai/flux/schnell + DeepSeek commercial art director",
-                },
-                {
-                    **variant_b_data,
-                    "label":       "Campaign Variant B",
-                    "description": "Result-focused: Saudi person after using Therapia, transformation visible, outcome clear",
-                    "source":      "fal-ai/flux/schnell + DeepSeek commercial director",
-                    "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
-                },
-            ]
+            primary_variant = variant_a if variant_a["status"] == "ok" else variant_b
+            variants = [variant_a, variant_b]
 
             return {
-                "design_url":      first_url,
-                "thumbnail_url":   first_thumb,
+                "design_url":      primary_variant.get("design_url"),
+                "thumbnail_url":   primary_variant.get("thumbnail_url"),
                 "variants":        variants,
                 "memory_snapshot": memory_snapshot,
-                "model_used":      "fal-ai/flux/schnell + DeepSeek (A: product-in-use, B: outcome campaign)",
-                "notes":           ["provisional" if (brand_mem and brand_mem.is_provisional) else "approved-brand"],
+                "model_used":      "Template renderer (Pillow) + fal.ai background + Thmanyah font",
+                "notes":           ["template-driven", "arabic-rtl-safe", "brand-controlled"],
             }
         except Exception as exc:
-            return {"error": str(exc), "design_url": None, "thumbnail_url": None, "variants": [], "memory_snapshot": {}}
+            return {
+                "error": str(exc), "design_url": None, "thumbnail_url": None,
+                "variants": [], "memory_snapshot": {}
+            }
