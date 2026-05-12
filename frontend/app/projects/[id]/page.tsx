@@ -45,7 +45,7 @@ const FILE_TYPES = [
   { key: 'other', label: 'Other', icon: FileText, accept: '*/*', hint: 'Any file · Max 10MB' },
 ]
 
-const TABS = ['Assets', 'Memory', 'Pipeline', 'Analytics']
+const TABS = ['Brand Guide', 'Pipeline', 'Assets', 'Memory', 'Analytics']
 
 type AnalyticsAsset = {
   asset_id: string
@@ -66,7 +66,7 @@ export default function ProjectPage() {
   const slug = params.id as string
   const projectName = slug.charAt(0).toUpperCase() + slug.slice(1)
 
-  const [tab, setTab] = useState('Pipeline')
+  const [tab, setTab] = useState('Brand Guide')
   const [activeType, setActiveType] = useState('logo')
   const [uploads, setUploads] = useState<Array<{ type: string; url: string; name: string }>>([])
   const [memory, setMemory] = useState<Record<string, unknown> | null>(null)
@@ -268,6 +268,86 @@ export default function ProjectPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 pb-[7rem]">
+
+        {/* ── BRAND GUIDE TAB ── */}
+        {tab === 'Brand Guide' && (
+          <div className="space-y-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">Brand Guide</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Paste your full brand.md here — agents read this before every pipeline run.
+                    Colors, tone, positioning, audience, dos/don&apos;ts, Arabic rules.
+                  </p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${brief.length > 100 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-600 border border-amber-200'}`}>
+                  {brief.length > 100 ? '✓ Active' : 'Empty — agents using defaults'}
+                </span>
+              </div>
+
+              {brief.length === 0 && (
+                <div className="mt-3 mb-3 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5 text-xs text-indigo-700">
+                  No brand guide yet. Paste your brand.md or write it here. The more context you give, the better every generated asset will match your brand.
+                </div>
+              )}
+
+              <textarea
+                value={brief}
+                onChange={e => { setBrief(e.target.value); setBriefSaved(false) }}
+                rows={24}
+                placeholder={`# ${slug.charAt(0).toUpperCase() + slug.slice(1)} Brand Guide\n\n## Colors\nprimary: #001A4D\naccent: #4169E1\n\n## Typography\nArabic: Thmanyah Sans Black (headlines)\nEnglish: Inter\n\n## Tone\nGulf Saudi dialect, warm, direct...\n\n## Target Audience\n...\n\n## Positioning\n...\n\n## Arabic Rules\nGulf dialect only. No فصحى...\n\n## Do\n- ...\n\n## Don't\n- ...`}
+                className="w-full mt-3 bg-gray-50 border border-gray-200 focus:border-indigo-400 rounded-lg px-4 py-3 font-mono text-xs text-gray-800 resize-none outline-none transition-colors leading-relaxed placeholder:text-gray-400"
+                dir="auto"
+              />
+
+              <div className="flex items-center justify-between mt-3">
+                <p className="text-xs text-gray-400 font-mono">{brief.length.toLocaleString()} chars</p>
+                <div className="flex items-center gap-2">
+                  {briefSaved && (
+                    <span className="text-xs text-emerald-600">Saved — agents will use this on next run</span>
+                  )}
+                  <button
+                    disabled={briefSaving}
+                    onClick={async () => {
+                      setBriefSaving(true)
+                      try {
+                        const r = await fetch(`${API}/projects/${slug}/memory`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ brand_brief: brief }),
+                        })
+                        if (r.ok) setBriefSaved(true)
+                      } finally { setBriefSaving(false) }
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-lg min-h-[40px] disabled:opacity-40 transition-colors"
+                  >
+                    {briefSaving ? <Loader2 size={13} className="animate-spin" /> : briefSaved ? <Check size={13} /> : null}
+                    {briefSaving ? 'Saving...' : briefSaved ? 'Saved ✓' : 'Save Brand Guide'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* What agents do with it */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <p className="text-xs font-semibold text-gray-600 mb-2">How agents use your brand guide</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  ['Strategy Agent', 'Campaign goals, audience, funnel direction'],
+                  ['Copy Agent', 'Tone, dialect, vocabulary, CTAs, forbidden words'],
+                  ['Design Agent', 'Colors, style, visual direction, safe zones'],
+                  ['QA Agent', 'Brand compliance, tone check, Arabic rules'],
+                ].map(([agent, desc]) => (
+                  <div key={agent} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+                    <p className="text-xs font-semibold text-gray-700">{agent}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── ASSETS TAB ── */}
         {tab === 'Assets' && (
