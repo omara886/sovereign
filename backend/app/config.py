@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # Self-referential public URL — used for file serve links stored in DB
     BACKEND_PUBLIC_URL: str = "https://backend-production-37a17.up.railway.app"
 
+    # Open Design — Variant C design engine (local daemon + web)
+    OPEN_DESIGN_ENABLED: bool = False
+    OPEN_DESIGN_WEB_URL: str = "http://127.0.0.1:58851"
+    OPEN_DESIGN_DAEMON_URL: str = "http://127.0.0.1:58846"
+
 
 @lru_cache
 def get_settings() -> Settings:

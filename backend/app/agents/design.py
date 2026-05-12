@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.fal_tools import generate_image_fal
+from app.agents.open_design_adapter import generate_open_design_variant
 from app.tools.image_tools import render_product_showcase, render_infographic, create_thumbnail
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 from app.tools.r2_tools import upload_to_r2
@@ -299,15 +300,35 @@ class DesignAgent(BaseAgent):
             variant_a = await _make_variant_a()
             variant_b = await _make_variant_b()
 
+            # ── Variant C: Open Design (runs only when OPEN_DESIGN_ENABLED=true) ──
+            proj_name = (brand_mem.brand_voice or "")[:20].split()[0] if brand_mem and brand_mem.brand_voice else "Therapia"
+            variant_c = await generate_open_design_variant(
+                asset_id=asset_id,
+                headline_ar=" ".join(copy_ar.split()[:6]) if copy_ar else copy_en[:50],
+                subhead_ar=cta_ar[:40] if cta_ar else "",
+                cta_ar=cta_ar[:25] if cta_ar else "",
+                cta_en=cta_en[:25] if cta_en else "",
+                brand_primary=primary,
+                brand_accent=accent,
+                channel=channel,
+                width=w,
+                height=h,
+                upload_fn=upload_to_r2,
+                project_name=proj_name or "Therapia",
+            )
+
             primary_variant = variant_a if variant_a["status"] == "ok" else variant_b
+            # Always include A+B; include C only if it ran (not skipped)
             variants = [variant_a, variant_b]
+            if variant_c.get("status") not in ("skipped",):
+                variants.append(variant_c)
 
             return {
                 "design_url":      primary_variant.get("design_url"),
                 "thumbnail_url":   primary_variant.get("thumbnail_url"),
                 "variants":        variants,
                 "memory_snapshot": memory_snapshot,
-                "model_used":      "Template renderer (Pillow) + fal.ai background + Thmanyah font",
+                "model_used":      "Pillow+fal.ai (A/B) + Open Design daemon (C)",
                 "notes":           ["template-driven", "arabic-rtl-safe", "brand-controlled"],
             }
         except Exception as exc:
