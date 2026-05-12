@@ -259,6 +259,20 @@ export default function PipelinePage() {
   useEffect(() => { load() }, [load])
 
   const totalAssets = stages.reduce((n, s) => n + s.count, 0)
+  const [clearing, setClearing] = useState(false)
+
+  const clearOld = async () => {
+    if (!confirm('Delete all assets older than 7 days (non-published)? This cannot be undone.')) return
+    setClearing(true)
+    try {
+      const r = await fetch(`${API}/pipeline/board/clear`, { method: 'DELETE' })
+      const d = await r.json()
+      alert(d.message)
+      load()
+    } finally {
+      setClearing(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
@@ -267,7 +281,9 @@ export default function PipelinePage() {
         <div className="max-w-full mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-base font-semibold text-gray-900">Pipeline Board</h1>
-            <p className="text-xs text-gray-500 mt-0.5">{totalAssets} assets across all stages</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {totalAssets} assets · last 14 days · most recent first
+            </p>
           </div>
           <div className="flex items-center gap-3">
             {/* Project filter */}
@@ -289,6 +305,14 @@ export default function PipelinePage() {
                 </button>
               ))}
             </div>
+            {/* Clear old assets */}
+            <button
+              onClick={clearOld}
+              disabled={clearing}
+              className="text-xs px-2.5 py-1.5 rounded-md font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+            >
+              {clearing ? 'Clearing...' : 'Clear Old'}
+            </button>
             <button onClick={load} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors">
               <RefreshCw size={14} />
             </button>

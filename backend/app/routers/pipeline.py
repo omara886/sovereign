@@ -583,14 +583,40 @@ async def regenerate_design(
             'message': 'Generating 2 campaign variants — refresh inbox in ~60s'}
 
 
+@router.delete("/board/clear")
+async def clear_pipeline_board(db: AsyncSession = Depends(get_db)):
+    """Delete all assets older than 7 days that are not published."""
+    from app.models.asset import Asset
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    result = await db.execute(
+        select(Asset).where(
+            Asset.created_at < cutoff,
+            Asset.status != "published"
+        )
+    )
+    old_assets = result.scalars().all()
+    count = len(old_assets)
+    for a in old_assets:
+        await db.delete(a)
+    await db.commit()
+    return {"deleted": count, "message": f"Cleared {count} old assets (>7 days, not published)"}
+
+
 @router.get("/board")
 async def pipeline_board(db: AsyncSession = Depends(get_db)):
-    """Factory line board — all assets grouped by pipeline stage."""
+    """Factory line board — recent assets (last 14 days) grouped by stage, newest first."""
     from app.models.asset import Asset
     from app.models.project import Project
+    from datetime import timedelta
 
+    # Only show last 14 days — keeps board clean and focused
+    cutoff = datetime.now(timezone.utc) - timedelta(days=14)
     assets = (await db.execute(
-        select(Asset).order_by(Asset.created_at.desc()).limit(100)
+        select(Asset)
+        .where(Asset.created_at >= cutoff)
+        .order_by(Asset.created_at.desc())
+        .limit(100)
     )).scalars().all()
 
     projects = {str(p.id): p for p in (await db.execute(select(Project))).scalars().all()}
