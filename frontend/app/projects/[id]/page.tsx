@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { FetchError } from '@/components/ui/FetchError'
 import { ProjectImage } from '@/components/ui/ProjectImage'
-import { Upload, Image, Type, Palette, FileText, Check, Loader2, Brain, Zap, Play, Sparkles } from 'lucide-react'
+import { Upload, Image, Type, Palette, FileText, Check, Loader2, Zap, Play, Sparkles } from 'lucide-react'
 
 const API = '/api/proxy'
 
@@ -380,95 +380,27 @@ export default function ProjectPage() {
         {/* ── MEMORY TAB ── */}
         {tab === 'Memory' && (
           <div className="space-y-4">
+
+            {/* Brand Brief (editable — agents read this on every run) */}
             <AnimatedContent delay={0}>
-              <Card>
-                <div className="flex items-center gap-2 mb-4">
-                  <Brain size={16} className="text-[#C9A84C]" />
-                  <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">Brand Memory</h2>
-                  {brand && <Badge variant={brand.is_provisional ? 'warning' : 'success'}>
-                    {brand.is_provisional ? 'Provisional' : 'Approved'}
-                  </Badge>}
-                </div>
-                {brand ? (
-                  <div className="space-y-3">
-                    <Row label="Visual Style" value={brand.visual_style as string} />
-                    <Row label="Brand Voice" value={brand.brand_voice as string} />
-                    <div>
-                      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-1">Do</p>
-                      {((brand.dos as string[]) || []).map((d, i) => (
-                        <p key={i} className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.7)] flex gap-2">
-                          <span className="text-[#10B981]">✓</span>{d}
-                        </p>
-                      ))}
-                    </div>
-                    <div>
-                      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-1">Don&apos;t</p>
-                      {((brand.donts as string[]) || []).map((d, i) => (
-                        <p key={i} className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.7)] flex gap-2">
-                          <span className="text-[#EF4444]">✗</span>{d}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                ) : <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.3)]">Loading...</p>}
-              </Card>
-            </AnimatedContent>
-
-            <AnimatedContent delay={100}>
-              <Card>
-                <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1] mb-4">Project Memory</h2>
-                {memory ? (
-                  <div className="space-y-3">
-                    <Row label="Positioning" value={memory.positioning as string} />
-                    <Row label="Tone" value={memory.tone as string} />
-                    <Row label="Languages" value={(memory.languages as string[])?.join(', ')} />
-                    {!!memory.performance_learnings && (
-                      <Row label="Learnings" value={String(memory.performance_learnings)} />
-                    )}
-                    <div>
-                      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-2">Funnel Goals</p>
-                      <div className="overflow-x-auto">
-                        {Object.entries((memory.funnel_goals as Record<string, unknown>) || {}).map(([stage, data]) => {
-                          const d = data as Record<string, unknown>
-                          return (
-                            <div key={stage} className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center py-1 border-b border-[rgba(255,255,255,0.04)] last:border-0">
-                              <span className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.5)] capitalize">{stage}</span>
-                              <span className="font-['IBM_Plex_Mono'] text-xs text-[#C9A84C]">
-                                {String(d.current ?? 0)} / {String(d.target ?? '?')} {String(d.metric ?? '')}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                ) : <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.3)]">Loading...</p>}
-              </Card>
-            </AnimatedContent>
-
-            {/* Brand Brief — markdown text editor */}
-            <AnimatedContent delay={160}>
-              <Card>
+              <div className="bg-white border border-gray-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-[#C9A84C]" />
-                    <h2 className="font-['IBM_Plex_Sans'] text-sm font-semibold text-[#F8F6F1]">Brand Brief</h2>
+                    <Sparkles size={15} className="text-indigo-500" />
+                    <h2 className="text-sm font-semibold text-gray-900">Brand Brief</h2>
+                    <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">Active — read on every pipeline run</span>
                   </div>
-                  <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.3)]">Used in every design generation</p>
                 </div>
-                <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)] mb-3">
-                  Write your brand story, visual direction, tone, and key messaging in plain text or Markdown. Agents read this before generating any content.
-                </p>
                 <textarea
                   value={brief}
                   onChange={e => { setBrief(e.target.value); setBriefSaved(false) }}
-                  rows={8}
-                  placeholder={`# Brand Brief\n\n## What we do\nTherapia is a mental wellness platform...\n\n## Visual direction\nNavy blue (#001A4D) primary, electric blue (#4169E1) accent...\n\n## Tone\nWarm, professional, never clinical...`}
-                  className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] focus:border-[rgba(201,168,76,0.4)] rounded-xl px-4 py-3 font-['IBM_Plex_Mono'] text-xs text-[rgba(248,246,241,0.8)] resize-none outline-none transition-colors leading-relaxed"
+                  rows={7}
+                  placeholder={`## What we do\nTherapia is a mental wellness platform...\n\n## Visual direction\nNavy blue (#001A4D) primary, electric blue (#4169E1) accent...\n\n## Tone\nWarm, professional, never clinical...\n\n## Target audience\nSaudi professionals 25-45, urban, health-conscious...`}
+                  className="w-full bg-gray-50 border border-gray-200 focus:border-indigo-400 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-800 resize-none outline-none transition-colors leading-relaxed placeholder:text-gray-400"
                   dir="auto"
                 />
-                <div className="flex items-center justify-between mt-3">
-                  <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.25)]">{brief.length} chars</p>
+                <div className="flex items-center justify-between mt-2.5">
+                  <p className="text-xs text-gray-400">{brief.length} chars</p>
                   <button
                     disabled={briefSaving}
                     onClick={async () => {
@@ -480,18 +412,164 @@ export default function ProjectPage() {
                           body: JSON.stringify({ brand_brief: brief }),
                         })
                         if (r.ok) setBriefSaved(true)
-                      } finally {
-                        setBriefSaving(false)
-                      }
+                      } finally { setBriefSaving(false) }
                     }}
-                    className="flex items-center gap-2 font-['IBM_Plex_Sans'] text-sm font-semibold text-[#0A0A0A] bg-[#C9A84C] hover:bg-[#E8C97A] px-4 py-2 rounded-xl min-h-[40px] disabled:opacity-40 transition-colors"
+                    className="flex items-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg min-h-[36px] disabled:opacity-40 transition-colors"
                   >
                     {briefSaving ? <Loader2 size={13} className="animate-spin" /> : briefSaved ? <Check size={13} /> : null}
-                    {briefSaving ? 'Saving...' : briefSaved ? 'Saved ✓' : 'Save Brief'}
+                    {briefSaving ? 'Saving...' : briefSaved ? 'Saved' : 'Save Brief'}
                   </button>
                 </div>
-              </Card>
+              </div>
             </AnimatedContent>
+
+            {/* Funnel Goals — with progress */}
+            {memory && (memory.funnel_goals as Record<string, unknown>) && Object.keys(memory.funnel_goals as Record<string,unknown>).length > 0 && (
+              <AnimatedContent delay={60}>
+                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                  <h2 className="text-sm font-semibold text-gray-900 mb-3">Funnel Goals</h2>
+                  <div className="space-y-3">
+                    {Object.entries((memory.funnel_goals as Record<string, unknown>) || {}).map(([stage, data]) => {
+                      const d = data as Record<string, unknown>
+                      const current = Number(d.current ?? 0)
+                      const target = Number(d.target ?? 0)
+                      const progress = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0
+                      return (
+                        <div key={stage}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium text-gray-700 capitalize">{stage}</span>
+                            <span className="text-xs font-mono text-gray-500">
+                              {current} / {target || '?'} {String(d.metric ?? '')}
+                            </span>
+                          </div>
+                          {target > 0 && (
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${progress}%`, background: progress >= 80 ? '#10B981' : progress >= 50 ? '#4F46E5' : '#F59E0B' }} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </AnimatedContent>
+            )}
+
+            {/* ICP + Positioning + Tone — key strategy inputs */}
+            {memory && (
+              <AnimatedContent delay={100}>
+                <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+                  <h2 className="text-sm font-semibold text-gray-900">Strategy Context</h2>
+                  {!!(memory.positioning as string) && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Positioning</p>
+                      <p className="text-sm text-gray-700">{memory.positioning as string}</p>
+                    </div>
+                  )}
+                  {!!(memory.tone as string) && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Tone</p>
+                      <p className="text-sm text-gray-700">{memory.tone as string}</p>
+                    </div>
+                  )}
+                  {!!(memory.icp) && Object.keys(memory.icp as Record<string,unknown>).length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1.5">Target Audience (ICP)</p>
+                      <div className="space-y-1">
+                        {Object.entries(memory.icp as Record<string,unknown>).slice(0,4).map(([k, v]) => (
+                          <div key={k} className="flex gap-2 text-xs">
+                            <span className="text-gray-400 capitalize w-20 shrink-0">{k}:</span>
+                            <span className="text-gray-700">{Array.isArray(v) ? (v as string[]).slice(0,3).join(', ') : String(v)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!!(memory.constraints) && !!(memory.constraints as Record<string,unknown>).excluded_topics && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Never mention</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {((memory.constraints as Record<string,unknown>).excluded_topics as string[] ?? []).map((t: string, i: number) => (
+                          <span key={i} className="text-xs bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </AnimatedContent>
+            )}
+
+            {/* Brand Memory — colors, voice, dos/don'ts */}
+            {brand && (
+              <AnimatedContent delay={140}>
+                <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-gray-900">Brand Identity</h2>
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${brand.is_provisional ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                      {brand.is_provisional ? 'Provisional' : 'Approved'}
+                    </span>
+                  </div>
+                  {(brand.color_palette as Record<string,string>) && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Colors</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {Object.entries(brand.color_palette as Record<string,string>).map(([k, v]) => (
+                          <div key={k} className="flex items-center gap-1.5 bg-gray-50 rounded px-2 py-1 border border-gray-100">
+                            <div className="w-3 h-3 rounded-full border border-gray-200" style={{ background: v }} />
+                            <span className="text-xs text-gray-600 capitalize">{k}</span>
+                            <span className="text-xs font-mono text-gray-400">{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!!(brand.visual_style) && <div><p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Visual Style</p><p className="text-sm text-gray-700">{brand.visual_style as string}</p></div>}
+                  {((brand.dos as string[]) || []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1.5">Content Rules — DO</p>
+                      {(brand.dos as string[]).slice(0,5).map((d, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-gray-700 py-0.5">
+                          <span className="text-emerald-500 shrink-0 mt-0.5">✓</span>{d}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {((brand.donts as string[]) || []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1.5">Content Rules — DON&apos;T</p>
+                      {(brand.donts as string[]).slice(0,5).map((d, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-gray-700 py-0.5">
+                          <span className="text-red-500 shrink-0 mt-0.5">✗</span>{d}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </AnimatedContent>
+            )}
+
+            {/* Approved / Rejected examples */}
+            {memory && ((memory.approved_examples as unknown[]) || []).length > 0 && (
+              <AnimatedContent delay={180}>
+                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                  <h2 className="text-sm font-semibold text-gray-900 mb-3">Learning Examples</h2>
+                  <div className="space-y-2">
+                    {(memory.approved_examples as Array<Record<string,unknown>>).slice(0,3).map((ex, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs bg-emerald-50 rounded px-2.5 py-2 border border-emerald-100">
+                        <span className="text-emerald-600 shrink-0 mt-0.5 font-bold">✓</span>
+                        <span className="text-emerald-800">{String(ex.note || ex.copy_ar || ex.copy_en || JSON.stringify(ex)).slice(0,120)}</span>
+                      </div>
+                    ))}
+                    {(memory.rejected_examples as Array<Record<string,unknown>> ?? []).slice(0,3).map((ex, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs bg-red-50 rounded px-2.5 py-2 border border-red-100">
+                        <span className="text-red-600 shrink-0 mt-0.5 font-bold">✗</span>
+                        <span className="text-red-800">{String((ex as Record<string,unknown>).what_to_avoid || (ex as Record<string,unknown>).note || '').slice(0,120)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </AnimatedContent>
+            )}
           </div>
         )}
 
@@ -817,12 +895,13 @@ export default function ProjectPage() {
   )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function Row({ label, value }: { label: string; value: string | undefined }) {
   if (!value) return null
   return (
-    <div className="border-b border-[rgba(255,255,255,0.04)] pb-2 last:border-0">
-      <p className="font-['IBM_Plex_Sans'] text-xs text-[rgba(248,246,241,0.4)]">{label}</p>
-      <p className="font-['IBM_Plex_Sans'] text-sm text-[rgba(248,246,241,0.8)] mt-0.5">{value}</p>
+    <div className="border-b border-gray-100 pb-2 last:border-0">
+      <p className="text-xs text-gray-400">{label}</p>
+      <p className="text-sm text-gray-800 mt-0.5">{value}</p>
     </div>
   )
 }

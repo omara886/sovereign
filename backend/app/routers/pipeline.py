@@ -118,15 +118,11 @@ async def _run_full_pipeline(project_id: str, job_id: str):
     from app.models.project import Project
     from app.tools.memory_tools import get_project_memory
 
+    # Initialize job properly so steps_history is tracked and Lab shows real logs
+    _new_job(job_id, project_id, "", "full")
+
     def log(step: str, agent: str = "", sources: list = None, decisions: list = None):
-        _jobs[job_id] = {
-            "status": "running",
-            "step": step,
-            "project_id": project_id,
-            "agent": agent,
-            "data_sources": sources or [],
-            "decisions": decisions or [],
-        }
+        _log_step(job_id, step, agent, sources, decisions)
 
     log("Reading brand guide and project memory...", "Strategy Agent", ["BrandMemory", "ProjectMemory", "MetricHistory"])
     try:
@@ -231,25 +227,22 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 result = await approval_agent.notify_pending_assets(
                     db, project_id, project.name, passed
                 )
-                _jobs[job_id] = {
-                    "status": "done",
-                    "step": f"{len(passed)} assets ready in Approval Inbox",
-                    "project_id": project_id,
-                    "plan_id": str(plan.id),
-                    "assets_generated": len(tactics),
-                    "assets_passed_qa": len(passed),
-                    "email_sent": result.get("email_sent"),
-                    "objective": plan.objective,
-                }
+                _log_step(job_id, f"{len(passed)} asset(s) sent to Approval Inbox", "Approval Agent",
+                          decisions=[f"{len(passed)} passed QA", "Telegram notification sent"])
             else:
-                _jobs[job_id] = {
-                    "status": "done",
-                    "step": "Pipeline done — no assets passed QA",
-                    "project_id": project_id,
-                    "assets_passed_qa": 0,
-                }
+                _log_step(job_id, "Pipeline done — no assets passed QA", "QA Agent")
+
+            _finish_job(job_id, "done")
+            job = _jobs.get(job_id, {})
+            job["project_name"] = project.name
+            job["plan_id"] = str(plan.id)
+            job["assets_generated"] = len(tactics)
+            job["assets_passed_qa"] = len(passed)
+            job["objective"] = plan.objective
+            job["step"] = f"{len(passed)} asset(s) ready in Approval Inbox" if passed else "Pipeline done — no assets passed QA"
     except Exception as exc:
-        _jobs[job_id] = {"status": "error", "step": str(exc), "project_id": project_id}
+        _log_step(job_id, f"Error: {exc}", "System")
+        _finish_job(job_id, "error", str(exc))
 
 
 @router.post("/plan/{project_slug}")
@@ -270,6 +263,8 @@ async def trigger_pipeline(project_slug: str, background_tasks: BackgroundTasks,
         raise HTTPException(404, "Project not found")
     import uuid
     job_id = str(uuid.uuid4())
+    # Pre-initialize with project name so Lab shows it immediately
+    _new_job(job_id, str(project.id), project.name, "full")
     background_tasks.add_task(_run_full_pipeline, str(project.id), job_id)
     return {"job_id": job_id, "status": "started", "message": f"Full pipeline started for {project.name}"}
 
@@ -412,6 +407,116 @@ def _build_agent_statuses(job: dict | None) -> list[dict]:
             agents.append({**a, "status": "idle", "last_output": "", "time_taken": "", "error": None})
 
     return agents
+
+
+@router.get("/lineage/{asset_id}")
+async def asset_lineage(asset_id: str, db: AsyncSession = Depends(get_db)):
+    """Full lineage for one asset: strategy → copy → design → QA → approval → publish."""
+    from app.models.asset import Asset
+    from app.models.approval import Approval
+    from app.models.publish_job import PublishJob
+    from app.models.project import Project
+    from uuid import UUID
+
+    try:
+        asset_uuid = UUID(asset_id)
+    except ValueError:
+        raise HTTPException(400, "invalid asset_id")
+
+    asset = await db.get(Asset, asset_uuid)
+    if not asset:
+        raise HTTPException(404, "asset not found")
+
+    project = await db.get(Project, asset.project_id)
+
+    # Weekly plan + tactic that generated this asset
+    plan = None
+    tactic = None
+    if asset.weekly_plan_id:
+        from app.models.weekly_plan import WeeklyPlan
+        plan = await db.get(WeeklyPlan, asset.weekly_plan_id)
+        if plan and plan.tactics:
+            # Match tactic by channel + asset type
+            for t in plan.tactics:
+                if t.get("channel") == asset.channel and t.get("asset_type") == asset.type:
+                    tactic = t
+                    break
+            if not tactic and plan.tactics:
+                tactic = plan.tactics[0]
+
+    # Approval decision
+    approval = (await db.execute(
+        select(Approval).where(Approval.asset_id == asset_uuid).limit(1)
+    )).scalar_one_or_none()
+
+    # Publish job
+    pub = (await db.execute(
+        select(PublishJob).where(PublishJob.asset_id == asset_uuid).limit(1)
+    )).scalar_one_or_none()
+
+    return {
+        "asset_id": str(asset.id),
+        "project": project.name if project else "Unknown",
+        "project_slug": project.slug if project else "",
+        "channel": asset.channel,
+        "type": asset.type,
+        "language": asset.language,
+        "status": asset.status,
+        "lineage": [
+            {
+                "stage": "Strategy",
+                "agent": "Strategy Agent",
+                "output": plan.objective if plan else "No plan",
+                "detail": f"Funnel: {plan.funnel_focus}" if plan else "",
+                "status": "done" if plan else "missing",
+            },
+            {
+                "stage": "Tactic",
+                "agent": "Strategy Agent",
+                "output": f"{asset.channel} {asset.type}" if tactic else f"{asset.channel} {asset.type}",
+                "detail": tactic.get("rationale_simple", tactic.get("rationale", "")) if tactic else "Tactic from weekly plan",
+                "status": "done" if tactic else "done",
+            },
+            {
+                "stage": "Copy",
+                "agent": "Copy Agent + Localization",
+                "output": (asset.copy_ar or asset.copy_en or "")[:100],
+                "detail": f"CTA: {asset.cta_ar or asset.cta_en or '—'}",
+                "status": "done" if (asset.copy_ar or asset.copy_en) else "missing",
+            },
+            {
+                "stage": "Design",
+                "agent": "Design Agent (fal.ai)",
+                "output": "Creative generated" if asset.design_url else "No creative",
+                "detail": f"Thumbnail: {'✓' if asset.design_thumbnail_url else '✗'}",
+                "status": "done" if asset.design_url else "failed",
+            },
+            {
+                "stage": "QA",
+                "agent": "QA Agent",
+                "output": f"Score: {asset.qa_score}/100" if asset.qa_score is not None else "Not scored",
+                "detail": "Passed" if asset.qa_passed else ("Failed" if asset.qa_score is not None else "Pending"),
+                "status": "done" if asset.qa_passed else ("failed" if asset.qa_score is not None else "pending"),
+            },
+            {
+                "stage": "Approval",
+                "agent": "Founder Decision",
+                "output": approval.decision if approval else "Pending",
+                "detail": f"Rejected: {approval.reason}" if (approval and approval.decision == 'rejected') else "",
+                "status": "done" if (approval and approval.decision == 'approved') else
+                          "failed" if (approval and approval.decision == 'rejected') else "pending",
+            },
+            {
+                "stage": "Published",
+                "agent": "Publishing Agent",
+                "output": f"Posted at {pub.published_at}" if (pub and pub.published_at) else
+                          f"Scheduled: {pub.scheduled_at}" if pub else "Not scheduled",
+                "detail": pub.platform_post_id or "",
+                "status": "done" if (pub and pub.published_at) else
+                          "running" if pub else "idle",
+            },
+        ],
+    }
 
 
 @router.get("/board")
