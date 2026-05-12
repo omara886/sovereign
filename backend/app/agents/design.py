@@ -22,47 +22,62 @@ from app.tools.image_tools import render_product_showcase, render_infographic, c
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 from app.tools.r2_tools import upload_to_r2
 
-# ── Variant A background prompt director ────────────────────────────────────
+# ── Permanent negative prompt block (Rule 3 from research) ──────────────────
+# Anti-realism + anti-text-takeover applied to EVERY generation
+
+NEGATIVE_PROMPT = (
+    "photorealistic man, businessman in suit, shemagh portrait, stock photo, "
+    "plastic skin, HDR face, shallow depth of field, cinematic portrait, "
+    "neon blue purple gradient, glowing particles, generic corporate photography, "
+    "giant text, random glyphs, broken letters, arabic letters in image, "
+    "latin letters, numbers in image, watermark, signature, "
+    "cluttered layout, cheap ad template, social media ad template, "
+    "oversized text, huge letters, dominant typography, text covering face, "
+    "wall of text, centered giant title, multiple random letters, "
+    "broken glyphs, latin-looking fake arabic, caption overlay, logo soup, "
+    "too many decorative elements, visual clutter, random icons, "
+    "busy background, unbalanced hierarchy, textured noise everywhere, "
+    "dribbble-style glow, floating particles, generic futuristic interface, "
+    "blue purple gradient, neon tech background, AI face symmetry"
+)
+
+# ── Variant A: product showcase background (format-first prompting) ──────────
 
 BACKGROUND_A_PROMPT = """You are a commercial background art director.
-Generate a fal.ai prompt for a BACKGROUND IMAGE ONLY — no text, no typography.
-The background will have Arabic headline and product text overlaid by the app.
+Generate a fal.ai prompt for a BACKGROUND IMAGE ONLY — no text anywhere.
 
-BACKGROUND DIRECTION (Variant A — product-in-context):
-- Clean, premium environment: modern Saudi apartment, bright office, or minimalist setting
-- Subtle depth — slightly blurred background, sharp foreground object
-- Brand accent color as ambient light source
-- Optional: person's hands holding a phone (no screen visible, no text)
-- Generates visual depth and warmth without competing with the text overlay
+PROMPT ORDER (Rule 4): format → style → layout → subject → palette → exclusions
 
-REQUIRED:
-- NO text, numbers, letters, or typography anywhere in the image
-- NO cluttered backgrounds
-- Bottom 40% must be available for text (dark gradient or clean dark area)
-- Premium commercial photography quality
+BACKGROUND DIRECTION (Variant A — product showcase composition):
+- Format: premium brand campaign poster background
+- Visual language: flat 3D illustration hybrid OR editorial product photography
+- Composition: hero object left or center, generous negative space bottom 40% for text overlay
+- Subject: phone/health device OR abstract health-tech visual element, NO people preferred
+- Palette: brand primary dark color dominant, accent as highlight
+- Mood: premium, restrained, contemporary Saudi health-tech brand
 
-OUTPUT: fal.ai prompt for background only. Max 100 words. No explanation."""
+Text-safe zone: bottom 45% must be clean dark gradient — Arabic headline goes here.
 
-# ── Variant B background prompt director ────────────────────────────────────
+OUTPUT: fal.ai prompt for background only. Max 90 words. No explanation."""
+
+# ── Variant B: infographic background (format-first prompting) ───────────────
 
 BACKGROUND_B_PROMPT = """You are a commercial background art director.
-Generate a fal.ai prompt for a BACKGROUND IMAGE ONLY — no text, no numbers.
-The background will have Arabic metrics, headline, and benefit blocks overlaid.
+Generate a fal.ai prompt for a BACKGROUND IMAGE ONLY — no text anywhere.
 
-BACKGROUND DIRECTION (Variant B — abstract/data-inspired):
-- Abstract geometric or data-visualization inspired visual
-- Clean, dark or brand-color background with subtle depth
-- Soft gradient, abstract shapes, or technology-inspired pattern
-- Premium digital product marketing aesthetic
-- No people, no real-world scenes
+PROMPT ORDER (Rule 4): format → style → layout → subject → palette → exclusions
 
-REQUIRED:
-- NO text, numbers, letters, or typography anywhere in the image
-- Needs to work as a clean canvas for infographic overlays
-- Brand primary color should dominate
-- Premium quality, not generic stock
+BACKGROUND DIRECTION (Variant B — infographic/data visual):
+- Format: information design poster background, modular editorial grid aesthetic
+- Visual language: geometric vector shapes, abstract data visualization, icon-led composition
+- Composition: structured grid pattern OR abstract circles/arcs suggesting health metrics
+- Subject: abstract geometric forms, no people, no faces, no devices
+- Palette: brand primary color dominant, soft gradient overlay
+- Mood: premium digital health, restrained, systematic, contemporary
 
-OUTPUT: fal.ai prompt only. Max 100 words. No explanation."""
+The overlay will add a large metric number + Arabic text over this background.
+
+OUTPUT: fal.ai prompt only. Max 90 words. No explanation."""
 
 PLATFORM_DIMS_FAL = {
     "instagram_post":    {"width": 1080, "height": 1080},
@@ -96,22 +111,30 @@ class DesignAgent(BaseAgent):
                               brand_style: str, funnel_stage: str, brief: str) -> str:
         primary = brand_colors.get("primary", "#001A4D")
         accent  = brand_colors.get("accent",  "#4169E1")
+        # Format-first prompt structure (Rule 4 from research)
         msg = (
-            f"Brand colors: primary={primary}, accent={accent}\n"
-            f"Visual style: {brand_style}\nFunnel: {funnel_stage}\n"
-            f"Campaign context: {copy_en[:100]}\n"
+            f"BRAND: {brand_style}\n"
+            f"PALETTE: primary {primary}, accent {accent}\n"
+            f"CAMPAIGN: {copy_en[:80]}\n"
         )
         if brief:
-            msg += f"Brand brief: {brief[:200]}\n"
-        msg += "Generate the fal.ai BACKGROUND prompt now. No text in image."
+            msg += f"BRAND BRIEF: {brief[:150]}\n"
+        msg += (
+            "\nGenerate the fal.ai background prompt using format-first structure:\n"
+            "[format] → [visual language] → [composition] → [subject] → [palette] → [exclusions]\n"
+            "Reserve bottom 45% as clear text-safe zone. No text in image."
+        )
         try:
             p = await agent.run(msg, None)  # type: ignore
             return p.strip().strip('"').strip("'")
         except Exception:
             return (
-                f"Abstract premium background, brand color {primary} dominant, "
-                f"soft geometric shapes, dark gradient, no text, no people, "
-                f"commercial app-marketing aesthetic, high quality photography"
+                f"Premium campaign poster background, flat 3D illustration hybrid, "
+                f"asymmetrical modular grid, hero element center-left, "
+                f"generous negative space bottom 45% for text overlay, "
+                f"brand color {primary} dominant, accent {accent} highlights, "
+                f"matte vector and soft gradient, high-end health-tech brand aesthetic, "
+                f"no text, no people, no watermark, no stock photo look"
             )
 
     def _build_memory_snapshot(self, brand_mem, project_mem, channel: str) -> dict:
@@ -199,11 +222,16 @@ class DesignAgent(BaseAgent):
             metric_val, metric_lbl = self._extract_metric(copy_ar)
             benefits = self._extract_benefits(copy_ar, copy_en)
 
+            # Use flux/schnell (fast, 4 steps) — no negative_prompt support
+            # Switch to "fal-ai/flux-pro" or "fal-ai/flux/dev" for negative prompts
+            FAL_MODEL = "fal-ai/flux/schnell"
+
             async def _make_variant_a() -> dict:
                 try:
                     bg = await generate_image_fal(
-                        bg_prompt_a + " NO TEXT NO TYPOGRAPHY",
-                        "fal-ai/flux/schnell", w, h
+                        bg_prompt_a,
+                        FAL_MODEL, w, h,
+                        negative_prompt=NEGATIVE_PROMPT,
                     )
                     final_img = await render_product_showcase(
                         w, h,
@@ -233,8 +261,9 @@ class DesignAgent(BaseAgent):
             async def _make_variant_b() -> dict:
                 try:
                     bg = await generate_image_fal(
-                        bg_prompt_b + " NO TEXT NO TYPOGRAPHY ABSTRACT ONLY",
-                        "fal-ai/flux/schnell", w, h
+                        bg_prompt_b,
+                        FAL_MODEL, w, h,
+                        negative_prompt=NEGATIVE_PROMPT,
                     )
                     final_img = await render_infographic(
                         w, h,
