@@ -30,13 +30,17 @@ async def create_approval(payload: ApprovalCreate, db: AsyncSession = Depends(ge
 
 
 @router.get("", response_model=list[ApprovalRead])
-async def list_approvals(project_id: UUID | None = None, status: str = "pending", db: AsyncSession = Depends(get_db)):
-    q = select(Approval)
+async def list_approvals(
+    project_id: UUID | None = None,
+    status: str = "pending",
+    db: AsyncSession = Depends(get_db),
+):
+    q = select(Approval).order_by(Approval.created_at.desc())  # newest first
     if status == "pending":
         q = q.where(Approval.decision.is_(None))
     approvals = (await db.execute(q)).scalars().all()
     if not project_id:
-        return approvals
+        return list(approvals)
     result = []
     for a in approvals:
         if a.asset_id:
@@ -50,6 +54,38 @@ async def list_approvals(project_id: UUID | None = None, status: str = "pending"
     return result
 
 
+@router.delete("/clear")
+async def clear_old_approvals(db: AsyncSession = Depends(get_db)):
+    """Delete all pending approvals older than 1 day."""
+    from datetime import datetime, timezone, timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(days=1)
+    q = select(Approval).where(
+        Approval.decision.is_(None),
+        Approval.created_at < cutoff,
+    )
+    old = (await db.execute(q)).scalars().all()
+    count = len(old)
+    for a in old:
+        await db.delete(a)
+    await db.commit()
+    return {"deleted": count, "message": f"Cleared {count} old pending approvals"}
+
+
+# PATCH /{approval_id} — matches what the frontend calls
+@router.patch("/{approval_id}", response_model=ApprovalRead)
+async def patch_approval(approval_id: UUID, payload: dict, db: AsyncSession = Depends(get_db)):
+    """Approve or reject via PATCH — maps frontend decide() call."""
+    decision = payload.get("decision")
+    reason = payload.get("rejection_reason") or payload.get("reason")
+    if not decision:
+        raise HTTPException(400, "decision required")
+    try:
+        return await handle_approval_decision(db, str(approval_id), decision, reason, None)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+# POST /{approval_id}/decide — legacy route kept for compatibility
 @router.post("/{approval_id}/decide", response_model=ApprovalRead)
 async def decide_approval(approval_id: UUID, payload: ApprovalDecision, db: AsyncSession = Depends(get_db)):
     try:

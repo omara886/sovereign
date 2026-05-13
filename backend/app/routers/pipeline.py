@@ -261,6 +261,72 @@ async def _run_full_pipeline(project_id: str, job_id: str):
         _finish_job(job_id, "error", str(exc))
 
 
+@router.post("/brief/{project_slug}")
+async def run_campaign_brief(
+    project_slug: str,
+    campaign_brief: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    3-agent campaign brief flow:
+      marketing-agent → decision
+      creative-agent  → art direction + generation prompt
+      qa-agent        → compliance score + approve/block
+    Returns full JSON report. No auto-generation — human approves and triggers pipeline.
+    """
+    from app.models.project import Project
+    from app.agents.marketing_agent import MarketingAgent
+    from app.agents.creative_agent import CreativeAgent
+    from app.agents.qa_agent_ops import QAAgentOps
+
+    project = (await db.execute(select(Project).where(Project.slug == project_slug))).scalar_one_or_none()
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    project_id = str(project.id)
+    copy_ar = campaign_brief.get("copy_ar", "")
+    copy_en = campaign_brief.get("key_message", "")
+    cta_ar  = campaign_brief.get("cta_ar", "")
+
+    # Step 1 — marketing-agent
+    marketing = MarketingAgent()
+    decision = await marketing.decide(db, project_id, campaign_brief)
+
+    if decision.get("decision") == "no_asset":
+        return {
+            "status": "stopped",
+            "reason": "marketing-agent returned no_asset",
+            "marketing_decision": decision,
+            "human_actions": decision.get("missing_sources", []) or [decision.get("reason")],
+        }
+
+    # Step 2 — creative-agent
+    creative = CreativeAgent()
+    art_direction = await creative.direct(db, project_id, decision, copy_ar, copy_en)
+
+    # Step 3 — qa-agent
+    qa = QAAgentOps()
+    qa_result = await qa.review(db, project_id, art_direction, copy_ar, copy_en, cta_ar)
+
+    # Compose sidecar metadata template
+    sidecar_template = {
+        "campaign_brief": campaign_brief,
+        "marketing_decision": decision,
+        "art_direction": art_direction,
+        "qa_result": qa_result,
+        "approve_for_design": qa_result.get("approve_for_design", False),
+        "compliance_score": qa_result.get("compliance_score", 0),
+        "blocking_reasons": qa_result.get("blocking_reasons", []),
+        "next_step": (
+            "Run pipeline → design + QA → human approval → publish"
+            if qa_result.get("approve_for_design")
+            else f"Fix blocking issues: {qa_result.get('blocking_reasons', [])}"
+        ),
+    }
+
+    return sidecar_template
+
+
 @router.post("/plan/{project_slug}")
 async def trigger_plan(project_slug: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     project = (await db.execute(select(Project).where(Project.slug == project_slug))).scalar_one_or_none()

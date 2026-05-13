@@ -21,8 +21,20 @@ from app.scheduler.jobs import scheduler
 settings = get_settings()
 
 
+async def _ensure_schema():
+    """Run any missing DDL that Alembic may not have applied yet."""
+    from app.database import engine
+    async with engine.connect() as conn:
+        # brand_brief column added post-initial-migration
+        await conn.execute(__import__("sqlalchemy").text(
+            "ALTER TABLE project_memory ADD COLUMN IF NOT EXISTS brand_brief TEXT"
+        ))
+        await conn.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await _ensure_schema()
     scheduler.start()
     yield
     scheduler.shutdown(wait=False)

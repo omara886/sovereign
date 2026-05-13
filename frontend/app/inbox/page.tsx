@@ -643,6 +643,18 @@ export default function InboxPage() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={async () => {
+                if (!confirm('Delete all pending approvals older than 24 hours?')) return
+                const r = await fetch(`${API}/approvals/clear`, { method: 'DELETE' })
+                const d = await r.json()
+                setToast(d.message)
+                fetchAll()
+              }}
+              className="text-xs px-2.5 py-1.5 rounded-md font-medium text-red-500 hover:bg-red-50 transition-colors"
+            >
+              Clear Old
+            </button>
             <button onClick={fetchAll} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors">
               <RefreshCw size={14} />
             </button>
