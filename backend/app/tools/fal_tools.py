@@ -37,17 +37,29 @@ async def generate_image_fal(
             "output_format": "jpeg",
         }
 
-        if "schnell" in model:
-            # schnell: 4-12 steps. 8 = same cost, better quality
+        if "ideogram" in model:
+            # Ideogram v2: different argument schema — no steps/guidance, uses aspect_ratio
+            # FAL guide: best for text-heavy infographics, strong typography
+            ar = "1:1"
+            if width == 1080 and height == 1350: ar = "4:5"
+            elif width == 1080 and height == 1920: ar = "9:16"
+            elif width == 1200 and height == 627: ar = "16:9"
+            arguments = {
+                "prompt": prompt,
+                "aspect_ratio": ar,
+                "expand_prompt": False,
+                "style": "DESIGN",  # Ideogram: DESIGN = clean layouts, infographics
+            }
+            if negative_prompt:
+                arguments["negative_prompt"] = negative_prompt
+        elif "schnell" in model:
             arguments["num_inference_steps"] = min(max(num_inference_steps, 8), 12)
         elif "dev" in model:
-            # flux/dev: 28 steps, full negative prompt support, best quality
             arguments["num_inference_steps"] = 28
             arguments["guidance_scale"] = guidance_scale
             if negative_prompt:
                 arguments["negative_prompt"] = negative_prompt
         else:
-            # flux-pro or other: use provided params
             arguments["num_inference_steps"] = max(num_inference_steps, 20)
             arguments["guidance_scale"] = guidance_scale
             if negative_prompt:

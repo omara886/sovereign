@@ -300,85 +300,115 @@ class DesignAgent(BaseAgent):
             metric_val, metric_lbl = self._extract_metric(copy_ar)
             benefits = self._extract_benefits(copy_ar, copy_en)
 
-            # flux/dev: 28 steps, proper negative prompt support, dramatically better
-            # composition, coherence, and artistic quality vs schnell
-            FAL_MODEL = "fal-ai/flux/dev"
+            # Variant A: flux/dev (lifestyle/campaign background)
+            # Variant B: ideogram/v2 (typography-first, built for infographics per FAL guide)
+            FAL_MODEL_A = "fal-ai/flux/dev"
+            FAL_MODEL_B = "fal-ai/ideogram/v2"  # FAL guide: best for text-heavy infographics
+
+            # Fetch logo bytes for brand overlay
+            logo_bytes: bytes | None = None
+            logo_url = (brand_mem.logo_url or "") if brand_mem else ""
+            if logo_url and (logo_url.startswith("http") or logo_url.startswith("data:")):
+                try:
+                    import httpx as _httpx
+                    if logo_url.startswith("data:"):
+                        import base64 as _b64
+                        logo_bytes = _b64.b64decode(logo_url.split(",", 1)[1])
+                    else:
+                        async with _httpx.AsyncClient(timeout=8) as _c:
+                            _r = await _c.get(logo_url)
+                            if _r.status_code == 200:
+                                logo_bytes = _r.content
+                except Exception:
+                    logo_bytes = None
 
             async def _make_variant_a() -> dict:
                 try:
                     bg = await generate_image_fal(
                         bg_prompt_a,
-                        FAL_MODEL, w, h,
+                        FAL_MODEL_A, w, h,
                         negative_prompt=neg_a or NEGATIVE_PROMPT,
                     )
                     final_img = await render_product_showcase(
                         w, h,
-                        headline_ar=" ".join(copy_ar.split()[:6]),  # max 6 words for readable Arabic headline
-                        subhead_ar=cta_ar[:40] if cta_ar else "",
-                        cta_ar=cta_ar[:25] if cta_ar else "",
-                        cta_en=cta_en[:25] if cta_en else "",
+                        headline_ar=copy_ar,   # FULL copy — RAQM wraps correctly
+                        subhead_ar=copy_en[:80] if copy_en else "",
+                        cta_ar=cta_ar[:30] if cta_ar else "",
+                        cta_en=cta_en[:30] if cta_en else "",
                         brand_primary=primary,
                         brand_accent=accent,
                         bg_bytes=bg,
+                        logo_bytes=logo_bytes,
                     )
                     thumb = await create_thumbnail(final_img)
                     vid   = f"{asset_id}_vA"
                     durl  = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
                     turl  = await upload_to_r2(thumb,     f"{vid}_thumb.jpg", "image/jpeg")
                     return {
-                        "variant": "A", "label": "Product Showcase",
-                        "description": "Brand-controlled template: Arabic headline + CTA + product frame. Thmanyah font, RTL layout, brand colors.",
+                        "variant": "A", "label": "Campaign Visual",
+                        "description": "Full Arabic copy + brand logo. Thmanyah+RAQM, RTL, brand colors.",
                         "design_url": durl, "thumbnail_url": turl,
                         "bg_prompt": bg_prompt_a, "status": "ok",
                         "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
                     }
                 except BaseException as exc:
-                    return {"variant": "A", "label": "Product Showcase",
+                    return {"variant": "A", "label": "Campaign Visual",
                             "error": str(exc), "status": "failed"}
 
             async def _make_variant_b() -> dict:
                 try:
+                    # Ideogram v2: use FAL guide infographic prompt template
+                    # Provide explicit layout instructions for typography-heavy design
+                    ideogram_prompt = (
+                        f"Create a clean, modern infographic in {w}x{h} format. "
+                        f"Premium editorial style, restrained color palette with {accent} accent on {primary} background. "
+                        f"Large bold headline area at top, {len(benefits)} key benefit sections in a balanced grid, "
+                        f"each with a simple icon and short text. High-contrast typography, generous spacing, "
+                        f"minimal decoration. No Arabic text — text will be overlaid. "
+                        f"Bottom 40% clear for text overlay. No watermark, no logo, no letters."
+                    )
                     bg = await generate_image_fal(
-                        bg_prompt_b,
-                        FAL_MODEL, w, h,
-                        negative_prompt=neg_b or NEGATIVE_PROMPT,
+                        ideogram_prompt,
+                        FAL_MODEL_B, w, h,
+                        negative_prompt="cluttered, busy, watermark, text, letters, numbers, arabic, neon, generic",
                     )
                     final_img = await render_infographic(
                         w, h,
-                        headline_ar=" ".join(copy_ar.split()[:6]),  # max 6 words for readable Arabic headline
+                        headline_ar=copy_ar,   # FULL copy — RAQM wraps correctly
                         benefits=benefits,
                         metric_value=metric_val,
                         metric_label=metric_lbl,
-                        cta_ar=cta_ar[:25] if cta_ar else "",
-                        cta_en=cta_en[:25] if cta_en else "",
+                        cta_ar=cta_ar[:30] if cta_ar else "",
+                        cta_en=cta_en[:30] if cta_en else "",
                         brand_primary=primary,
                         brand_accent=accent,
                         bg_bytes=bg,
+                        logo_bytes=logo_bytes,
                     )
                     thumb = await create_thumbnail(final_img)
                     vid   = f"{asset_id}_vB"
                     durl  = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
                     turl  = await upload_to_r2(thumb,     f"{vid}_thumb.jpg", "image/jpeg")
                     return {
-                        "variant": "B", "label": "Infographic Outcome",
-                        "description": "Brand-controlled template: metric hero + benefit blocks + Arabic headline. No text baked in fal.ai.",
+                        "variant": "B", "label": "Infographic",
+                        "description": "Ideogram v2 (FAL guide: best for infographics) + full Arabic copy + brand logo.",
                         "design_url": durl, "thumbnail_url": turl,
-                        "bg_prompt": bg_prompt_b, "status": "ok",
+                        "bg_prompt": ideogram_prompt, "status": "ok",
                         "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
                     }
                 except BaseException as exc:
-                    return {"variant": "B", "label": "Infographic Outcome",
+                    return {"variant": "B", "label": "Infographic",
                             "error": str(exc), "status": "failed"}
 
             variant_a = await _make_variant_a()
             variant_b = await _make_variant_b()
 
-            # ── Variant C: Open Design (runs only when OPEN_DESIGN_ENABLED=true) ──
+            # ── Variant C: Open Design ──
             proj_name = (brand_mem.brand_voice or "")[:20].split()[0] if brand_mem and brand_mem.brand_voice else "Therapia"
             variant_c = await generate_open_design_variant(
                 asset_id=asset_id,
-                headline_ar=" ".join(copy_ar.split()[:6]) if copy_ar else copy_en[:50],
-                subhead_ar=cta_ar[:40] if cta_ar else "",
+                headline_ar=copy_ar,   # full copy
+                subhead_ar=copy_en[:60] if copy_en else "",
                 cta_ar=cta_ar[:25] if cta_ar else "",
                 cta_en=cta_en[:25] if cta_en else "",
                 brand_primary=primary,
@@ -401,7 +431,7 @@ class DesignAgent(BaseAgent):
                 "thumbnail_url":   primary_variant.get("thumbnail_url"),
                 "variants":        variants,
                 "memory_snapshot": memory_snapshot,
-                "model_used":      "fal-ai/flux/dev 28-step (A/B) + Pillow RAQM overlay + Open Design (C)",
+                "model_used":      "A: flux/dev 28-step | B: ideogram/v2 DESIGN | C: Open Design",
                 "notes":           ["template-driven", "arabic-rtl-safe", "brand-controlled"],
             }
         except Exception as exc:

@@ -193,6 +193,26 @@ def _hex(h: str) -> tuple[int, int, int]:
         return (0, 26, 77)
 
 
+def _overlay_logo(canvas: Image.Image, logo_bytes: bytes, width: int, height: int) -> Image.Image:
+    """Place brand logo top-left, max 12% width, preserved aspect ratio."""
+    try:
+        from io import BytesIO as _Bio
+        logo = Image.open(_Bio(logo_bytes)).convert("RGBA")
+        max_logo_w = int(width * 0.12)
+        max_logo_h = int(height * 0.06)
+        logo.thumbnail((max_logo_w, max_logo_h), Image.LANCZOS)
+        pad = int(width * 0.05)
+        bar_h = max(4, height // 200)
+        paste_y = bar_h + int(height * 0.018)
+        # Paste with alpha mask
+        if canvas.mode != "RGBA":
+            canvas = canvas.convert("RGBA")
+        canvas.alpha_composite(logo, (pad, paste_y))
+        return canvas
+    except Exception:
+        return canvas
+
+
 def _gradient_rect(
     img: Image.Image, x0: int, y0: int, x1: int, y1: int,
     top_alpha: int, bottom_alpha: int, color: tuple[int, int, int]
@@ -217,6 +237,7 @@ def _render_product_showcase_sync(
     brand_primary: str,
     brand_accent: str,
     bg_bytes: bytes | None,
+    logo_bytes: bytes | None = None,
 ) -> bytes:
     # Brand tokens — all from brand_memory, no hardcoded fallbacks
     primary_rgb = _hex(brand_primary)
@@ -248,10 +269,15 @@ def _render_product_showcase_sync(
     draw.rectangle([(0, 0), (width, max(4, height // 200))],
                    fill=(*accent_rgb, 255))
 
-    # ── Brand name top-left ──
-    brand_font = _load_font(FONT_BOLD_PATH, max(18, width // 45))
-    draw.text((pad, max(4, height // 200) + int(height * 0.02)),
-              "Therapia", font=brand_font, fill=(*accent_rgb, 255))
+    # ── Brand logo top-left (replaces text name if available) ──
+    if logo_bytes:
+        canvas = _overlay_logo(canvas, logo_bytes, width, height)
+        draw = ImageDraw.Draw(canvas)  # redraw after logo
+    else:
+        # Brand name text fallback when no logo
+        brand_font = _load_font(FONT_BOLD_PATH, max(18, width // 45))
+        draw.text((pad, max(4, height // 200) + int(height * 0.02)),
+                  "Brand", font=brand_font, fill=(*accent_rgb, 255))
 
     # ── Arabic headline — anchored right, max 2 lines ──
     h_size = max(48, width // 15)
@@ -314,6 +340,7 @@ def _render_infographic_sync(
     brand_primary: str,
     brand_accent: str,
     bg_bytes: bytes | None,
+    logo_bytes: bytes | None = None,
 ) -> bytes:
     primary_rgb  = _hex(brand_primary)
     accent_rgb   = _hex(brand_accent)
@@ -339,12 +366,18 @@ def _render_infographic_sync(
     pad = int(width * 0.07)
     right_edge = width - pad
 
-    # ── Top accent bar + brand name ──
+    # ── Top accent bar ──
     draw.rectangle([(0, 0), (width, max(4, height // 200))],
                    fill=(*accent_rgb, 255))
-    brand_font = _load_font(FONT_BOLD_PATH, max(18, width // 45))
-    draw.text((pad, max(4, height // 200) + int(height * 0.02)),
-              "Therapia", font=brand_font, fill=(*accent_rgb, 255))
+
+    # ── Brand logo (or text fallback) ──
+    if logo_bytes:
+        canvas = _overlay_logo(canvas, logo_bytes, width, height)
+        draw = ImageDraw.Draw(canvas)
+    else:
+        brand_font = _load_font(FONT_BOLD_PATH, max(18, width // 45))
+        draw.text((pad, max(4, height // 200) + int(height * 0.02)),
+                  "Brand", font=brand_font, fill=(*accent_rgb, 255))
 
     # ── Hero metric: number + label separately ──
     if metric_value.strip():
@@ -443,11 +476,12 @@ async def render_product_showcase(
     brand_primary: str = "#001A4D",
     brand_accent: str = "#4169E1",
     bg_bytes: bytes | None = None,
+    logo_bytes: bytes | None = None,
 ) -> bytes:
     return await asyncio.to_thread(
         _render_product_showcase_sync,
         width, height, headline_ar, subhead_ar, cta_ar, cta_en,
-        brand_primary, brand_accent, bg_bytes,
+        brand_primary, brand_accent, bg_bytes, logo_bytes,
     )
 
 
@@ -462,11 +496,12 @@ async def render_infographic(
     brand_primary: str = "#001A4D",
     brand_accent: str = "#4169E1",
     bg_bytes: bytes | None = None,
+    logo_bytes: bytes | None = None,
 ) -> bytes:
     return await asyncio.to_thread(
         _render_infographic_sync,
         width, height, headline_ar, benefits or [], metric_value, metric_label,
-        cta_ar, cta_en, brand_primary, brand_accent, bg_bytes,
+        cta_ar, cta_en, brand_primary, brand_accent, bg_bytes, logo_bytes,
     )
 
 

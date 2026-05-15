@@ -845,7 +845,10 @@ async def lab_status(db: AsyncSession = Depends(get_db)):
             "assets/fonts/thmanyah typeface/thmanyahsans/otf/thmanyahsans-Bold.otf"
         ),
         "raqm_arabic_shaping": _raqm,
-        "image_model": "fal-ai/flux/dev (28 steps)",
+        "image_model_A": "fal-ai/flux/dev (28 steps, campaign)",
+        "image_model_B": "fal-ai/ideogram/v2 (DESIGN style, infographics)",
+        "open_design_enabled": bool((settings.OPEN_DESIGN_ENABLED if hasattr(settings, 'OPEN_DESIGN_ENABLED') else False)),
+        "open_design_daemon_url": (settings.OPEN_DESIGN_DAEMON_URL or "")[:40] if hasattr(settings, 'OPEN_DESIGN_DAEMON_URL') else "",
     }
     try:
         health["db_tables"] = bool(await db.scalar(
