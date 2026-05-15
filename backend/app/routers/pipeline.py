@@ -108,6 +108,8 @@ async def _run_plan(project_id: str, job_id: str):
 async def _run_full_pipeline(project_id: str, job_id: str):
     from app.database import SessionLocal
     from app.agents.strategy import StrategyAgent
+    from app.agents.concept_agent import ConceptAgent
+    from app.agents.visual_plan_agent import VisualPlanAgent
     from app.agents.copy import CopyAgent
     from app.agents.localization import LocalizationAgent
     from app.agents.design import DesignAgent
@@ -119,20 +121,19 @@ async def _run_full_pipeline(project_id: str, job_id: str):
     from app.models.project import Project
     from app.tools.memory_tools import get_project_memory
 
-    # Initialize job properly so steps_history is tracked and Lab shows real logs
     _new_job(job_id, project_id, "", "full")
 
     def log(step: str, agent: str = "", sources: list = None, decisions: list = None):
         _log_step(job_id, step, agent, sources, decisions)
 
-    log("Reading brand guide and project memory...", "Strategy Agent", ["BrandMemory", "ProjectMemory", "MetricHistory"])
+    log("Reading brand guide and project memory...", "Strategy Agent", ["BrandMemory", "ProjectMemory", "BrandBrief"])
     try:
         async with SessionLocal() as db:
             project = await db.get(Project, project_id)
             if not project:
                 raise ValueError("Project not found")
 
-            # Strategy
+            # ── Stage 01: Strategy ────────────────────────────────────────────
             strategy = StrategyAgent()
             plan_data = await strategy.create_plan(db, project_id, date.today())
             plan = WeeklyPlan(
@@ -150,9 +151,27 @@ async def _run_full_pipeline(project_id: str, job_id: str):
             await db.commit()
             await db.refresh(plan)
 
-            tactics = (plan.tactics or [])[:2]
+            # ── Stage 02: Concept — distinct story angles ─────────────────────
+            log("Generating distinct creative concepts...", "Concept Agent",
+                ["content-engine", "marketing-psychology"], ["3-5 distinct angles", "novelty scored"])
+            concept_agent = ConceptAgent()
+            concepts_data = await concept_agent.generate_concepts(db, project_id, plan_data)
+            recommended_ids = concepts_data.get("recommended", [])
+            all_concepts = {c["id"]: c for c in concepts_data.get("concepts", [])}
+
+            # Pick up to 2 concepts — one per tactic
+            selected_concepts = [all_concepts[cid] for cid in recommended_ids[:2] if cid in all_concepts]
+            if not selected_concepts:
+                # Fallback: use first 2 concepts regardless of score
+                selected_concepts = list(all_concepts.values())[:2]
+            if not selected_concepts:
+                # Hard fallback: no concepts generated, use tactic metadata
+                selected_concepts = [{"id": "C0", "layout_family": "hero_stat", "story_angle": "default"}]
+
+            tactics = (plan.tactics or [])[:max(2, len(selected_concepts))]
             copy_agent = CopyAgent()
             local_agent = LocalizationAgent()
+            visual_plan_agent = VisualPlanAgent()
             design_agent = DesignAgent()
             qa_agent = QAAgent()
             passed = []
@@ -160,6 +179,8 @@ async def _run_full_pipeline(project_id: str, job_id: str):
             for i, tactic in enumerate(tactics):
                 channel = tactic.get("channel", "instagram")
                 asset_type = tactic.get("asset_type", "post")
+                # Use matched concept if available, else first
+                concept = selected_concepts[i] if i < len(selected_concepts) else selected_concepts[0]
                 log(f"Writing copy for {channel} {asset_type} ({i+1}/{len(tactics)})...", "Copy Agent", ["ProjectMemory", "BrandMemory", "ApprovedExamples"], ["Gulf Saudi Arabic", "Excluded topics checked"])
 
                 copy_data = await copy_agent.generate_copy(
@@ -200,7 +221,21 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 await db.commit()
                 await db.refresh(asset)
 
-                log(f"Generating design ({i+1}/{len(tactics)})...", "Design Agent", ["BrandMemory.colors", "BrandMemory.logo", "ThmanyahFont"], ["Brand colors applied", "Thmanyah font", "RTL Arabic layout"])
+                # ── Stage 04: Visual plan per concept ───────────────────────
+                copy_blocks = {"copy_ar": copy_ar, "copy_en": copy_en, "cta_ar": cta_ar, "cta_en": cta_en}
+                lang = "ar"
+                visual_plan = await visual_plan_agent.plan(db, project_id, concept, copy_blocks, lang)
+
+                # Store concept + layout in tactic_id for audit trail
+                asset.tactic_id = f"{concept.get('id','C0')}:{visual_plan.get('layout_family','')}"
+                await db.commit()
+
+                log(
+                    f"Generating design ({i+1}/{len(tactics)}) — concept={concept.get('id')} layout={visual_plan.get('layout_family')}...",
+                    "Design Agent",
+                    ["BrandMemory.colors", "visual_plan.json", "ThmanyahFont", "craft-polish", "anti-slop"],
+                    ["Brand colors applied", "Constrained prompt compiler", "3 candidates self-scored"],
+                )
                 design_data = await design_agent.generate_design(
                     db, project_id, str(asset.id), channel, copy_ar, copy_en, cta_ar, cta_en
                 )
@@ -215,6 +250,11 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 asset.design_prompt        = json.dumps({
                     "memory_snapshot": mem_snap,
                     "model_used": design_data.get("model_used", ""),
+                    "concept_id": concept.get("id", ""),
+                    "layout_family": visual_plan.get("layout_family", ""),
+                    "style_family": visual_plan.get("style_family", ""),
+                    "persuasion_framework": concept.get("persuasion_framework", ""),
+                    "story_angle": concept.get("story_angle", ""),
                     "fal_prompt": new_variants[0].get("fal_prompt", "") if new_variants else "",
                 })
                 asset.copy_bilingual = {"cta_ar": cta_ar, "cta_en": cta_en}

@@ -37,10 +37,12 @@ async def generate_image_fal(
             "output_format": "jpeg",
         }
 
-        # Add inference params based on model capability
+        # Inference steps: schnell supports up to 12 (4=fast/low, 8=balanced, 12=best)
+        # We use 8 — same cost tier as 4, significantly better quality
         if "schnell" in model:
-            arguments["num_inference_steps"] = min(num_inference_steps, 4)
+            arguments["num_inference_steps"] = min(max(num_inference_steps, 8), 12)
         else:
+            # flux/dev, flux-pro: 20-28 steps, full negative prompt support
             arguments["num_inference_steps"] = max(num_inference_steps, 20)
             arguments["guidance_scale"] = guidance_scale
             if negative_prompt:
