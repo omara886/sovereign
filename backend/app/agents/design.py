@@ -1,88 +1,73 @@
 """
-Design Agent — Stage 05: Constrained prompt compilation + Stage 06: Generation.
+Design Agent — Two-layer architecture (non-negotiable):
+  Layer 1: fal.ai generates BEAUTIFUL VISUAL SCENE — no text, no Arabic
+  Layer 2: Pillow composites ALL text via Thmanyah font + arabic_reshaper
 
-DeepSeek is now a PROMPT COMPILER, not a freestyle LLM:
-  - Receives: strategy, concept, copy_blocks, visual_plan, + ALL skill rules
-  - Generates 3 candidate prompts, self-scores each, selects best 1-2
-  - Cannot skip constraints or ignore layout/text-safe-zone rules
-
-Stages:
-  05_prompt_generation  — DeepSeek compiles + self-scores 3 prompts
-  06_image_generation   — fal.ai generates background (no text)
-  07_overlay            — Pillow renders Arabic/Urdu via RAQM
+fal.ai cannot render Arabic. Never ask it to.
 """
 import asyncio
 import json
+import random
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.fal_tools import generate_image_fal
 from app.agents.open_design_adapter import generate_open_design_variant
-from app.tools.image_tools import render_product_showcase, render_infographic, create_thumbnail
+from app.tools.image_tools import composite_final_image, create_thumbnail
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 from app.tools.r2_tools import upload_to_r2
-from app.utils.skill_rules import (
-    anti_slop_rules, craft_polish_rules,
-    artifact_composition_rules, responsive_layout_rules,
-)
 
-# ── Permanent negative prompt block (Rule 3 from research) ──────────────────
-# Anti-realism + anti-text-takeover applied to EVERY generation
+# ── Visual scene prompts — Rich scenes, NOT dark gradients ────────────────────
+# fal.ai only. No text. No Arabic. Layer 2 (Pillow) handles all text.
 
-NEGATIVE_PROMPT = (
-    "photorealistic man, businessman in suit, shemagh portrait, stock photo, "
-    "plastic skin, HDR face, shallow depth of field, cinematic portrait, "
-    "neon blue purple gradient, glowing particles, generic corporate photography, "
-    "giant text, random glyphs, broken letters, arabic letters in image, "
-    "latin letters, numbers in image, watermark, signature, "
-    "cluttered layout, cheap ad template, social media ad template, "
-    "oversized text, huge letters, dominant typography, text covering face, "
-    "wall of text, centered giant title, multiple random letters, "
-    "broken glyphs, latin-looking fake arabic, caption overlay, logo soup, "
-    "too many decorative elements, visual clutter, random icons, "
-    "busy background, unbalanced hierarchy, textured noise everywhere, "
-    "dribbble-style glow, floating particles, generic futuristic interface, "
-    "blue purple gradient, neon tech background, AI face symmetry"
-)
+VISUAL_SCENE_PROMPTS = {
+    "family_lifestyle": (
+        "Warm lifestyle photography, Saudi family at home, mother checking child health on smartphone, "
+        "soft natural lighting, modern Saudi interior, white and warm tones, "
+        "professional health app promotional style, Apple Health aesthetic, "
+        "bokeh background, genuine caring moment, high quality commercial photography, "
+        "NO text, NO typography, NO Arabic script, NO Latin text anywhere in image, "
+        "clean composition with visual breathing room on left third"
+    ),
+    "product_minimal": (
+        "Clean minimal product visualization, smartphone floating on white background, "
+        "purple gradient glow, health app UI visible on screen, "
+        "geometric purple accent shapes, premium tech aesthetic, "
+        "white and purple color scheme, Apple-style product photography, "
+        "soft shadows, premium commercial quality, "
+        "NO text, NO typography, NO writing of any kind anywhere, "
+        "bottom 40% is lighter for text overlay"
+    ),
+    "empowerment_portrait": (
+        "Confident young Saudi woman looking at phone with relief expression, "
+        "modern Riyadh background softly blurred, warm professional lighting, "
+        "purple and gold color accents in clothing or environment, "
+        "health and wellness visual mood, empowerment feeling, "
+        "high quality portrait photography commercial style, "
+        "NO text, NO signs, NO Arabic or Latin writing anywhere visible"
+    ),
+    "abstract_health": (
+        "Abstract health and wellness background, flowing purple and white organic shapes, "
+        "geometric purple and gold gradient elements, "
+        "clean modern minimal design aesthetic, premium brand visual, "
+        "Saudi healthcare brand mood board style, "
+        "smooth gradients, elegant composition, "
+        "NO text, NO typography, NO words, NO letters of any kind, "
+        "large clear area bottom half for text placement"
+    ),
+    "data_visualization": (
+        "Data visualization aesthetic, purple and white color scheme, "
+        "abstract flowing data streams, circular health metrics visualization, "
+        "modern infographic background elements, premium fintech healthtech style, "
+        "geometric patterns in purple and gold, "
+        "clean professional background, "
+        "NO text, NO numbers, NO Arabic, NO Latin characters, "
+        "clear space on left 40% for Arabic text overlay"
+    ),
+}
 
-# ── Stage 05: Constrained Prompt Compiler ─────────────────────────────────────
-# DeepSeek generates 3 candidate prompts, self-scores each, selects best 1-2.
-# Cannot freestyle — all constraints from upstream stages are mandatory.
-
-PROMPT_COMPILER_SYSTEM = """You are a fal.ai prompt compiler for a commercial marketing agency.
-You are NOT allowed to freestyle. You MUST follow all constraints passed to you.
-
-YOUR JOB:
-1. Generate exactly 3 candidate prompts for the background image.
-2. Self-score each on: constraint_compliance (0-100), novelty (0-100), anti_slop_risk (lower=better, 0-100).
-3. Select the best 1-2 prompts only.
-4. Write your reasoning.
-
-HARD RULES (cannot be bypassed):
-- Every prompt must start with [Format]: e.g. "Infographic: ..." or "Poster: ..."
-- Every prompt must include brand palette hex values.
-- Every prompt must end with: "no text, no letters, no numbers, no watermark, no typography"
-- Every prompt must respect the text_safe_zones — that area must be clear for overlay.
-- NEVER include Arabic, Urdu, or any text in the image prompt.
-- Apply anti-slop negative prompts from the constraints.
-
-Output ONLY valid JSON:
-{
-  "candidates": [
-    {
-      "id": "P1",
-      "prompt": "...",
-      "negative_prompt": "...",
-      "scores": {"constraint_compliance": 0-100, "novelty": 0-100, "anti_slop_risk": 0-100},
-      "reasoning": "..."
-    }
-  ],
-  "selected": ["P1"],
-  "selection_reasoning": "..."
-}"""
-
-PLATFORM_DIMS_FAL = {
+PLATFORM_DIMS = {
     "instagram_post":    {"width": 1080, "height": 1080},
     "instagram_portrait":{"width": 1080, "height": 1350},
     "instagram_story":   {"width": 1080, "height": 1920},
@@ -91,13 +76,18 @@ PLATFORM_DIMS_FAL = {
     "google_display":    {"width": 1200, "height": 628},
 }
 
-# Open CoDesign principles used in the template renderer
+NEGATIVE_PROMPT = (
+    "text, typography, words, letters, Arabic script, Latin script, numbers, "
+    "watermark, signature, caption, logo, brand name, "
+    "neon gradients, floating particles, cluttered, busy"
+)
+
 OPENCODESIGN_PRINCIPLES = [
-    "artifact-composition.md — structured brand template, not raw prompt output",
-    "craft-polish.md — controlled spacing, contrast, hierarchy",
-    "frontend-design-anti-slop.md — no generic AI posters, no baked Arabic text",
-    "editorial-typography.jsx — Thmanyah Arabic, RTL, bidi, max 2 headline lines",
-    "accessibility-states.md — contrast validated, safe zones enforced",
+    "Layer 1: fal.ai — beautiful visual scene, no text",
+    "Layer 2: Pillow — Thmanyah Arabic + RTL + brand colors",
+    "arabic_reshaper + bidi — correct glyph shaping",
+    "Brand logo composited from brand_memory.logo_url",
+    "Full copy_ar — no truncation",
 ]
 
 
@@ -105,295 +95,123 @@ class DesignAgent(BaseAgent):
     MODEL = DEEPSEEK
 
     def __init__(self):
-        super().__init__(system_prompt=PROMPT_COMPILER_SYSTEM, tools=[], max_tokens=900)
-
-    async def _compile_prompts(
-        self,
-        copy_en: str,
-        copy_ar: str,
-        visual_plan: dict,
-        concept: dict,
-        brand_colors: dict,
-        brand_style: str,
-        funnel_stage: str,
-        brief: str,
-        variant_label: str = "A",
-    ) -> tuple[str, str]:
-        """
-        Stage 05: Compile 3 candidate prompts, self-score, return best (prompt, negative_prompt).
-        """
-        primary = brand_colors.get("primary", "#001A4D")
-        accent  = brand_colors.get("accent",  "#4169E1")
-        layout  = visual_plan.get("layout_family", concept.get("layout_family", "hero_stat"))
-        style   = visual_plan.get("style_family", "premium_flat")
-        no_go   = visual_plan.get("no_go_rules", [])
-        text_zones = visual_plan.get("text_safe_zones", [])
-
-        msg = (
-            f"VARIANT: {variant_label}\n"
-            f"FORMAT: {layout}\n"
-            f"STYLE FAMILY: {style}\n"
-            f"FUNNEL STAGE: {funnel_stage}\n"
-            f"BRAND PALETTE: primary={primary}, accent={accent}\n"
-            f"VISUAL STYLE: {brand_style}\n"
-            f"TEXT SAFE ZONES: {json.dumps(text_zones)} — these areas must be CLEAR in the image\n"
-            f"NO-GO RULES: {no_go}\n"
-            f"BRIEF: {brief[:200]}\n"
-            f"COPY CONTEXT (for art direction only — DO NOT put in prompt): AR={copy_ar[:60]} EN={copy_en[:60]}\n\n"
-            f"--- ANTI-SLOP CONSTRAINTS ---\n{anti_slop_rules()}\n\n"
-            f"--- CRAFT-POLISH ---\n{craft_polish_rules()}\n\n"
-            f"--- ARTIFACT-COMPOSITION ---\n{artifact_composition_rules()}\n\n"
-            f"--- RESPONSIVE-LAYOUT ---\n{responsive_layout_rules()}\n\n"
-            "Generate 3 candidate prompts, self-score, select best. Return JSON only."
-        )
-
-        try:
-            result = await self.run(msg, None)  # type: ignore
-            decoder = json.JSONDecoder()
-            start = result.find("{")
-            if start >= 0:
-                parsed, _ = decoder.raw_decode(result, start)
-                selected_ids = parsed.get("selected", [])
-                candidates = {c["id"]: c for c in parsed.get("candidates", [])}
-                if selected_ids and selected_ids[0] in candidates:
-                    best = candidates[selected_ids[0]]
-                    return best.get("prompt", ""), best.get("negative_prompt", NEGATIVE_PROMPT)
-        except Exception:
-            pass
-
-        # Fallback prompt if self-scoring fails
-        fallback_prompt = (
-            f"{layout.replace('_',' ').title()}: premium commercial marketing background, "
-            f"{style.replace('_',' ')} aesthetic, brand color {primary} dominant, "
-            f"accent {accent} highlights, clean {int(text_zones[0]['y_pct']*100) if text_zones else 45}% "
-            f"bottom area clear for text overlay, no text, no letters, no watermark"
-        )
-        return fallback_prompt, NEGATIVE_PROMPT
-
-    async def _get_bg_prompt(self, agent: BaseAgent, copy_en: str, brand_colors: dict,
-                              brand_style: str, funnel_stage: str, brief: str) -> str:
-        """Legacy wrapper — used when no visual_plan is available."""
-        primary = brand_colors.get("primary", "#001A4D")
-        accent  = brand_colors.get("accent",  "#4169E1")
-        msg = (
-            f"Generate a fal.ai background image prompt using this exact structure:\n"
-            f"[format] + [subject] + [brand mood] + [palette hint] + "
-            f"[composition with text-safe area bottom 45%] + [material/lighting] + [cleanliness constraints]\n\n"
-            f"Brand context: {brand_style} | palette: primary {primary}, accent {accent}\n"
-            f"Campaign: {copy_en[:80]}\n"
-        )
-        if brief:
-            msg += f"Brand brief: {brief[:120]}\n"
-        msg += (
-            "\nOutput: ONE fal.ai prompt only, max 80 words. No text/letters/typography in image. "
-            "Negative prompt not needed — just the positive prompt for the background."
-        )
-        try:
-            p = await agent.run(msg, None)  # type: ignore
-            return p.strip().strip('"').strip("'")
-        except Exception:
-            # Research-validated fallback formula
-            return (
-                f"Square premium wellness campaign background, modern healthcare brand aesthetic, "
-                f"calm contemporary composition, palette influenced by brand blue {accent} "
-                f"with soft ivory neutrals, clean negative space on the right side for Arabic "
-                f"headline overlay, elegant layered depth, subtle product-ad feel, "
-                f"no text, no letters, no watermark, no logo, no generic corporate portrait"
-            )
+        super().__init__(system_prompt="You are an art director.", tools=[], max_tokens=50)
 
     def _build_memory_snapshot(self, brand_mem, project_mem, channel: str) -> dict:
-        snap: dict = {"channel": channel, "template_engine": "Pillow deterministic"}
+        snap: dict = {"channel": channel}
         if brand_mem:
-            snap["brand_voice"]    = bool(brand_mem.brand_voice)
-            snap["colors"]         = bool(brand_mem.color_palette)
-            snap["visual_style"]   = bool(brand_mem.visual_style)
-            snap["dos"]            = len(brand_mem.dos or [])
-            snap["donts"]          = len(brand_mem.donts or [])
-            snap["is_provisional"] = brand_mem.is_provisional
+            snap["brand_voice"]   = bool(brand_mem.brand_voice)
+            snap["colors"]        = bool(brand_mem.color_palette)
+            snap["dos"]           = len(brand_mem.dos or [])
+            snap["is_provisional"]= brand_mem.is_provisional
         if project_mem:
-            snap["brand_brief"]       = bool(getattr(project_mem, "brand_brief", None))
-            snap["icp"]               = bool(project_mem.icp)
-            snap["positioning"]       = bool(project_mem.positioning)
-            snap["tone"]              = bool(project_mem.tone)
-            snap["funnel_goals"]      = bool(project_mem.funnel_goals)
-            snap["approved_examples"] = len(project_mem.approved_examples or [])
-            snap["rejected_examples"] = len(project_mem.rejected_examples or [])
-            snap["excluded_topics"]   = len(
-                (project_mem.constraints or {}).get("excluded_topics", [])
-            )
+            snap["brand_brief"]   = bool(getattr(project_mem, "brand_brief", None))
+            snap["icp"]           = bool(project_mem.icp)
+            snap["tone"]          = bool(project_mem.tone)
+            snap["approved"]      = len(project_mem.approved_examples or [])
+            snap["rejected"]      = len(project_mem.rejected_examples or [])
         return snap
 
-    def _extract_metric(self, copy_ar: str) -> tuple[str, str]:
-        """Extract a key metric from the Arabic copy (e.g., '٨' + 'دقائق')."""
-        import re
-        # Look for Arabic numerals or Eastern Arabic numerals
-        patterns = [
-            (r'(\d+)\s*(دقيقة|دقائق|ثانية|ساعة)', lambda m: (m.group(1), m.group(2))),
-            (r'([٠-٩]+)\s*(دقيقة|دقائق)', lambda m: (m.group(1), m.group(2))),
-            (r'(\d+)\s*(خطوة|خطوات|يوم|أيام|أسبوع)', lambda m: (m.group(1), m.group(2))),
-        ]
-        for pattern, extractor in patterns:
-            m = re.search(pattern, copy_ar)
-            if m:
-                try:
-                    val, label = extractor(m)
-                    return val, label
-                except Exception:
-                    pass
-        return "٨", "دقائق"  # default Therapia key metric
-
-    def _extract_benefits(self, copy_ar: str, copy_en: str) -> list[str]:
-        """Extract 3 short benefit phrases for the infographic blocks."""
-        # Try to split copy into short phrases
-        import re
-        phrases = re.split(r'[.،\n]', copy_ar)
-        clean = [p.strip() for p in phrases if len(p.strip()) > 3 and len(p.strip()) < 25]
-        if len(clean) >= 3:
-            return clean[:3]
-        # Fallback: generic Therapia benefits
-        return ["تقييم صحي شامل", "٨ دقائق فقط", "خطة شخصية"]
-
     async def generate_design(
-        self, db: AsyncSession, project_id: str, asset_id: str,
-        channel: str, copy_ar: str, copy_en: str,
-        cta_ar: str = "", cta_en: str = "", num_variants: int = 1
+        self,
+        db: AsyncSession,
+        project_id: str,
+        asset_id: str,
+        channel: str,
+        copy_ar: str,
+        copy_en: str,
+        cta_ar: str = "",
+        cta_en: str = "",
+        num_variants: int = 1,
     ) -> dict:
         try:
             brand_mem   = await get_brand_memory(db, project_id)
             project_mem = await get_project_memory(db, project_id)
 
-            colors    = (brand_mem.color_palette or {}) if brand_mem else {}
-            style     = (brand_mem.visual_style or "commercial app-marketing") if brand_mem else "commercial app-marketing"
-            primary   = colors.get("primary", colors.get("background", "#001A4D"))
-            accent    = colors.get("accent",  colors.get("secondary",  "#4169E1"))
-            brief     = getattr(project_mem, "brand_brief", None) or "" if project_mem else ""
+            colors  = (brand_mem.color_palette or {}) if brand_mem else {}
+            primary = colors.get("primary", "#4C1D95")
+            accent  = colors.get("accent",  "#F59E0B")
+            brand_colors = {"primary": primary, "accent": accent}
+
+            # Fetch logo
+            logo_bytes: bytes | None = None
+            logo_url = (brand_mem.logo_url or "") if brand_mem else ""
+            if logo_url and logo_url.startswith("http"):
+                try:
+                    import httpx as _hx
+                    async with _hx.AsyncClient(timeout=8) as _c:
+                        _r = await _c.get(logo_url)
+                        if _r.status_code == 200:
+                            logo_bytes = _r.content
+                except Exception:
+                    pass
+            elif logo_url.startswith("data:"):
+                try:
+                    import base64 as _b64
+                    logo_bytes = _b64.b64decode(logo_url.split(",", 1)[1])
+                except Exception:
+                    pass
 
             platform_key = channel.replace("-", "_").replace(" ", "_") + "_post"
-            fal_dims = PLATFORM_DIMS_FAL.get(platform_key, {"width": 1080, "height": 1080})
-            w, h = fal_dims["width"], fal_dims["height"]
+            dims = PLATFORM_DIMS.get(platform_key, {"width": 1080, "height": 1080})
+            w, h = dims["width"], dims["height"]
 
             memory_snapshot = self._build_memory_snapshot(brand_mem, project_mem, channel)
 
-            # ── Stage 05: Constrained prompt compilation ──────────────────
-            # Use visual_plan if available (from full 9-stage pipeline),
-            # otherwise fall back to legacy _get_bg_prompt
-            visual_plan_a = {
-                "layout_family": "hero_stat",
-                "style_family": "premium_flat",
-                "text_safe_zones": [{"y_pct": 0.52, "label": "headline"}],
-                "no_go_rules": ["no text in image", "no neon gradients", "no corporate portraits"],
-            }
-            visual_plan_b = {
-                "layout_family": "bento_grid",
-                "style_family": "minimal_data",
-                "text_safe_zones": [{"y_pct": 0.45, "label": "metric"}],
-                "no_go_rules": ["no text in image", "no generic icons", "no 3-column grids"],
-            }
-            bg_prompt_a, neg_a = await self._compile_prompts(
-                copy_en, copy_ar, visual_plan_a, visual_plan_a, colors, style, "awareness", brief, "A"
-            )
-            bg_prompt_b, neg_b = await self._compile_prompts(
-                copy_en, copy_ar, visual_plan_b, visual_plan_b, colors, style, "awareness", brief, "B"
-            )
-
-            # ── Extract infographic data from copy ──
-            metric_val, metric_lbl = self._extract_metric(copy_ar)
-            benefits = self._extract_benefits(copy_ar, copy_en)
-
-            # Variant A: flux/dev (lifestyle/campaign background)
-            # Variant B: ideogram/v2 (typography-first, built for infographics per FAL guide)
-            FAL_MODEL_A = "fal-ai/flux/dev"
-            FAL_MODEL_B = "fal-ai/ideogram/v2"  # FAL guide: best for text-heavy infographics
-
-            # Fetch logo bytes for brand overlay
-            logo_bytes: bytes | None = None
-            logo_url = (brand_mem.logo_url or "") if brand_mem else ""
-            if logo_url and (logo_url.startswith("http") or logo_url.startswith("data:")):
-                try:
-                    import httpx as _httpx
-                    if logo_url.startswith("data:"):
-                        import base64 as _b64
-                        logo_bytes = _b64.b64decode(logo_url.split(",", 1)[1])
-                    else:
-                        async with _httpx.AsyncClient(timeout=8) as _c:
-                            _r = await _c.get(logo_url)
-                            if _r.status_code == 200:
-                                logo_bytes = _r.content
-                except Exception:
-                    logo_bytes = None
-
+            # ── Variant A: flux/dev + family/lifestyle scene ────────────────
             async def _make_variant_a() -> dict:
                 try:
+                    scene_key = random.choice(["family_lifestyle", "empowerment_portrait"])
+                    scene_prompt = VISUAL_SCENE_PROMPTS[scene_key]
                     bg = await generate_image_fal(
-                        bg_prompt_a,
-                        FAL_MODEL_A, w, h,
-                        negative_prompt=neg_a or NEGATIVE_PROMPT,
+                        scene_prompt, "fal-ai/flux/dev", w, h,
+                        negative_prompt=NEGATIVE_PROMPT,
                     )
-                    final_img = await render_product_showcase(
-                        w, h,
-                        headline_ar=copy_ar,   # FULL copy — RAQM wraps correctly
-                        subhead_ar=copy_en[:80] if copy_en else "",
-                        cta_ar=cta_ar[:30] if cta_ar else "",
-                        cta_en=cta_en[:30] if cta_en else "",
-                        brand_primary=primary,
-                        brand_accent=accent,
-                        bg_bytes=bg,
-                        logo_bytes=logo_bytes,
+                    final_img = await asyncio.to_thread(
+                        composite_final_image,
+                        bg, copy_ar, copy_en, cta_ar,
+                        brand_colors, logo_bytes, w, h,
                     )
                     thumb = await create_thumbnail(final_img)
-                    vid   = f"{asset_id}_vA"
-                    durl  = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
-                    turl  = await upload_to_r2(thumb,     f"{vid}_thumb.jpg", "image/jpeg")
+                    vid = f"{asset_id}_vA"
+                    durl = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
+                    turl = await upload_to_r2(thumb, f"{vid}_thumb.jpg", "image/jpeg")
                     return {
                         "variant": "A", "label": "Campaign Visual",
-                        "description": "Full Arabic copy + brand logo. Thmanyah+RAQM, RTL, brand colors.",
+                        "description": f"flux/dev scene ({scene_key}) + Thmanyah Arabic overlay",
                         "design_url": durl, "thumbnail_url": turl,
-                        "bg_prompt": bg_prompt_a, "status": "ok",
+                        "scene_concept": scene_key, "status": "ok",
+                        "source": "flux/dev+pillow",
                         "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
                     }
                 except BaseException as exc:
                     return {"variant": "A", "label": "Campaign Visual",
                             "error": str(exc), "status": "failed"}
 
+            # ── Variant B: Ideogram v2 + data/abstract scene ────────────────
             async def _make_variant_b() -> dict:
                 try:
-                    # Ideogram v2: use FAL guide infographic prompt template
-                    # Provide explicit layout instructions for typography-heavy design
-                    ideogram_prompt = (
-                        f"Create a clean, modern infographic in {w}x{h} format. "
-                        f"Premium editorial style, restrained color palette with {accent} accent on {primary} background. "
-                        f"Large bold headline area at top, {len(benefits)} key benefit sections in a balanced grid, "
-                        f"each with a simple icon and short text. High-contrast typography, generous spacing, "
-                        f"minimal decoration. No Arabic text — text will be overlaid. "
-                        f"Bottom 40% clear for text overlay. No watermark, no logo, no letters."
-                    )
+                    scene_key = random.choice(["abstract_health", "data_visualization", "product_minimal"])
+                    scene_prompt = VISUAL_SCENE_PROMPTS[scene_key]
                     bg = await generate_image_fal(
-                        ideogram_prompt,
-                        FAL_MODEL_B, w, h,
-                        negative_prompt="cluttered, busy, watermark, text, letters, numbers, arabic, neon, generic",
+                        scene_prompt, "fal-ai/ideogram/v2", w, h,
+                        negative_prompt=NEGATIVE_PROMPT,
                     )
-                    final_img = await render_infographic(
-                        w, h,
-                        headline_ar=copy_ar,   # FULL copy — RAQM wraps correctly
-                        benefits=benefits,
-                        metric_value=metric_val,
-                        metric_label=metric_lbl,
-                        cta_ar=cta_ar[:30] if cta_ar else "",
-                        cta_en=cta_en[:30] if cta_en else "",
-                        brand_primary=primary,
-                        brand_accent=accent,
-                        bg_bytes=bg,
-                        logo_bytes=logo_bytes,
+                    final_img = await asyncio.to_thread(
+                        composite_final_image,
+                        bg, copy_ar, copy_en, cta_ar,
+                        brand_colors, logo_bytes, w, h,
                     )
                     thumb = await create_thumbnail(final_img)
-                    vid   = f"{asset_id}_vB"
-                    durl  = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
-                    turl  = await upload_to_r2(thumb,     f"{vid}_thumb.jpg", "image/jpeg")
+                    vid = f"{asset_id}_vB"
+                    durl = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
+                    turl = await upload_to_r2(thumb, f"{vid}_thumb.jpg", "image/jpeg")
                     return {
                         "variant": "B", "label": "Infographic",
-                        "description": "Ideogram v2 (FAL guide: best for infographics) + full Arabic copy + brand logo.",
+                        "description": f"Ideogram v2 scene ({scene_key}) + Thmanyah Arabic overlay",
                         "design_url": durl, "thumbnail_url": turl,
-                        "bg_prompt": ideogram_prompt, "status": "ok",
+                        "scene_concept": scene_key, "status": "ok",
+                        "source": "ideogram/v2+pillow",
                         "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
                     }
                 except BaseException as exc:
@@ -403,25 +221,22 @@ class DesignAgent(BaseAgent):
             variant_a = await _make_variant_a()
             variant_b = await _make_variant_b()
 
-            # ── Variant C: Open Design ──
-            proj_name = (brand_mem.brand_voice or "")[:20].split()[0] if brand_mem and brand_mem.brand_voice else "Therapia"
+            # ── Variant C: Open Design ──────────────────────────────────────
             variant_c = await generate_open_design_variant(
                 asset_id=asset_id,
-                headline_ar=copy_ar,   # full copy
+                headline_ar=copy_ar,
                 subhead_ar=copy_en[:60] if copy_en else "",
-                cta_ar=cta_ar[:25] if cta_ar else "",
-                cta_en=cta_en[:25] if cta_en else "",
+                cta_ar=cta_ar[:30] if cta_ar else "",
+                cta_en=cta_en[:30] if cta_en else "",
                 brand_primary=primary,
                 brand_accent=accent,
                 channel=channel,
-                width=w,
-                height=h,
+                width=w, height=h,
                 upload_fn=upload_to_r2,
-                project_name=proj_name or "Therapia",
+                project_name="Therapia",
             )
 
             primary_variant = variant_a if variant_a["status"] == "ok" else variant_b
-            # Always include A+B; include C only if it ran (not skipped)
             variants = [variant_a, variant_b]
             if variant_c.get("status") not in ("skipped",):
                 variants.append(variant_c)
@@ -431,11 +246,12 @@ class DesignAgent(BaseAgent):
                 "thumbnail_url":   primary_variant.get("thumbnail_url"),
                 "variants":        variants,
                 "memory_snapshot": memory_snapshot,
-                "model_used":      "A: flux/dev 28-step | B: ideogram/v2 DESIGN | C: Open Design",
-                "notes":           ["template-driven", "arabic-rtl-safe", "brand-controlled"],
+                "model_used":      "A: flux/dev | B: ideogram/v2 | C: open-design",
+                "notes":           ["two-layer: fal.ai scene + pillow arabic overlay"],
             }
         except Exception as exc:
             return {
-                "error": str(exc), "design_url": None, "thumbnail_url": None,
-                "variants": [], "memory_snapshot": {}
+                "error": str(exc),
+                "design_url": None, "thumbnail_url": None,
+                "variants": [], "memory_snapshot": {},
             }
