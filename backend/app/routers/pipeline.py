@@ -828,6 +828,11 @@ async def lab_status(db: AsyncSession = Depends(get_db)):
 
     # Health checks (sync — no external calls)
     settings = get_settings()
+    try:
+        from PIL import features as _pil_features
+        _raqm = _pil_features.check("raqm")
+    except Exception:
+        _raqm = False
     health = {
         "fal_key_set": bool((settings.FAL_KEY or "").strip()),
         "r2_configured": bool(
@@ -838,6 +843,8 @@ async def lab_status(db: AsyncSession = Depends(get_db)):
         "thmanyah_font_exists": os.path.exists(
             "assets/fonts/thmanyah typeface/thmanyahsans/otf/thmanyahsans-Bold.otf"
         ),
+        "raqm_arabic_shaping": _raqm,
+        "image_model": "fal-ai/flux/dev (28 steps)",
     }
     try:
         health["db_tables"] = bool(await db.scalar(

@@ -300,9 +300,9 @@ class DesignAgent(BaseAgent):
             metric_val, metric_lbl = self._extract_metric(copy_ar)
             benefits = self._extract_benefits(copy_ar, copy_en)
 
-            # Use flux/schnell (fast, 4 steps) — no negative_prompt support
-            # Switch to "fal-ai/flux-pro" or "fal-ai/flux/dev" for negative prompts
-            FAL_MODEL = "fal-ai/flux/schnell"
+            # flux/dev: 28 steps, proper negative prompt support, dramatically better
+            # composition, coherence, and artistic quality vs schnell
+            FAL_MODEL = "fal-ai/flux/dev"
 
             async def _make_variant_a() -> dict:
                 try:
@@ -401,7 +401,7 @@ class DesignAgent(BaseAgent):
                 "thumbnail_url":   primary_variant.get("thumbnail_url"),
                 "variants":        variants,
                 "memory_snapshot": memory_snapshot,
-                "model_used":      "Pillow+fal.ai (A/B) + Open Design daemon (C)",
+                "model_used":      "fal-ai/flux/dev 28-step (A/B) + Pillow RAQM overlay + Open Design (C)",
                 "notes":           ["template-driven", "arabic-rtl-safe", "brand-controlled"],
             }
         except Exception as exc:
