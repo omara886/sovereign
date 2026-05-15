@@ -291,9 +291,9 @@ export default function DashboardPage() {
   const isNewUser = !metricsLoading && totalGenerated === 0
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div className="min-h-screen bg-[#0D1117]">
       {/* Page header — clean, no aurora on light theme */}
-      <div className="bg-white border-b border-gray-200 pt-[calc(3rem+env(safe-area-inset-top))] pb-5 px-6">
+      <div className="bg-white border-b border-white/[0.08] pt-[calc(3rem+env(safe-area-inset-top))] pb-5 px-6">
         <div className="max-w-5xl mx-auto">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Sovereign</p>
           <h1 className="text-2xl font-bold text-gray-900">Command Center</h1>

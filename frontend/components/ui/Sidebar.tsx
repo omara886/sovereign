@@ -70,10 +70,10 @@ export default function Sidebar() {
       {!isMobile && (
         <>
       {/* Desktop sidebar — Linear/Notion style */}
-      <aside className="hidden md:flex fixed top-0 left-0 h-screen w-56 flex-col bg-white border-r border-gray-200 z-40">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <span className="text-sm font-bold text-gray-900">Sovereign</span>
-          <span className="block text-xs text-gray-400 mt-0.5">Marketing OS</span>
+      <aside className="hidden md:flex fixed top-0 left-0 h-screen w-56 flex-col bg-[#161B22] border-r border-white/[0.08] z-40">
+        <div className="px-5 py-4 border-b border-white/[0.06]">
+          <span className="text-sm font-bold text-[#E6EDF3]">Sovereign</span>
+          <span className="block text-xs text-[#6E7681] mt-0.5">Marketing OS</span>
         </div>
 
         <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
@@ -81,8 +81,8 @@ export default function Sidebar() {
             <Link key={href} href={href}
               className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors min-h-[36px] ${
                 isActive(href)
-                  ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-indigo-600/20 text-indigo-400'
+                  : 'text-[#8B949E] hover:bg-white/[0.06] hover:text-[#E6EDF3]'
               }`}
             >
               <Icon size={16} className="shrink-0" />
@@ -96,9 +96,9 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-gray-100">
+        <div className="px-3 py-3 border-t border-white/[0.06]">
           <button onClick={logout}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors w-full min-h-[36px]"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-[#6E7681] hover:text-red-400 hover:bg-red-500/10 transition-colors w-full min-h-[36px]"
           >
             <LogOut size={16} className="shrink-0" />
             <span className="text-sm">Sign Out</span>
@@ -117,10 +117,10 @@ export default function Sidebar() {
           left: 0,
           right: 0,
           zIndex: 50,
-          background: 'rgba(255,255,255,0.97)',
+          background: 'rgba(22,27,34,0.97)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderTop: '1px solid #E5E7EB',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
           paddingBottom: 'env(safe-area-inset-bottom)',
           height: 'calc(56px + env(safe-area-inset-bottom))',
         }}

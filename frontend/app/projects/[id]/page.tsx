@@ -272,7 +272,7 @@ export default function ProjectPage() {
         {/* ── BRAND GUIDE TAB ── */}
         {tab === 'Brand Guide' && (
           <div className="space-y-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="bg-white border border-white/[0.08] rounded-xl p-5">
               <div className="flex items-center justify-between mb-1">
                 <div>
                   <h2 className="text-sm font-semibold text-gray-900">Brand Guide</h2>
@@ -297,7 +297,7 @@ export default function ProjectPage() {
                 onChange={e => { setBrief(e.target.value); setBriefSaved(false) }}
                 rows={24}
                 placeholder={`# ${slug.charAt(0).toUpperCase() + slug.slice(1)} Brand Guide\n\n## Colors\nprimary: #001A4D\naccent: #4169E1\n\n## Typography\nArabic: Thmanyah Sans Black (headlines)\nEnglish: Inter\n\n## Tone\nGulf Saudi dialect, warm, direct...\n\n## Target Audience\n...\n\n## Positioning\n...\n\n## Arabic Rules\nGulf dialect only. No فصحى...\n\n## Do\n- ...\n\n## Don't\n- ...`}
-                className="w-full mt-3 bg-gray-50 border border-gray-200 focus:border-indigo-400 rounded-lg px-4 py-3 font-mono text-xs text-gray-800 resize-none outline-none transition-colors leading-relaxed placeholder:text-gray-400"
+                className="w-full mt-3 bg-gray-50 border border-white/[0.08] focus:border-indigo-400 rounded-lg px-4 py-3 font-mono text-xs text-gray-800 resize-none outline-none transition-colors leading-relaxed placeholder:text-gray-400"
                 dir="auto"
               />
 
@@ -330,7 +330,7 @@ export default function ProjectPage() {
             </div>
 
             {/* What agents do with it */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <div className="bg-gray-50 border border-white/[0.08] rounded-xl p-4">
               <p className="text-xs font-semibold text-gray-600 mb-2">How agents use your brand guide</p>
               <div className="grid grid-cols-2 gap-2">
                 {[
@@ -339,7 +339,7 @@ export default function ProjectPage() {
                   ['Design Agent', 'Colors, style, visual direction, safe zones'],
                   ['QA Agent', 'Brand compliance, tone check, Arabic rules'],
                 ].map(([agent, desc]) => (
-                  <div key={agent} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+                  <div key={agent} className="bg-white rounded-lg px-3 py-2 border border-white/[0.06]">
                     <p className="text-xs font-semibold text-gray-700">{agent}</p>
                     <p className="text-[11px] text-gray-500 mt-0.5">{desc}</p>
                   </div>
@@ -463,7 +463,7 @@ export default function ProjectPage() {
 
             {/* Brand Brief (editable — agents read this on every run) */}
             <AnimatedContent delay={0}>
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="bg-white border border-white/[0.08] rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Sparkles size={15} className="text-indigo-500" />
@@ -476,7 +476,7 @@ export default function ProjectPage() {
                   onChange={e => { setBrief(e.target.value); setBriefSaved(false) }}
                   rows={7}
                   placeholder={`## What we do\nTherapia is a mental wellness platform...\n\n## Visual direction\nNavy blue (#001A4D) primary, electric blue (#4169E1) accent...\n\n## Tone\nWarm, professional, never clinical...\n\n## Target audience\nSaudi professionals 25-45, urban, health-conscious...`}
-                  className="w-full bg-gray-50 border border-gray-200 focus:border-indigo-400 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-800 resize-none outline-none transition-colors leading-relaxed placeholder:text-gray-400"
+                  className="w-full bg-gray-50 border border-white/[0.08] focus:border-indigo-400 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-800 resize-none outline-none transition-colors leading-relaxed placeholder:text-gray-400"
                   dir="auto"
                 />
                 <div className="flex items-center justify-between mt-2.5">
@@ -506,7 +506,7 @@ export default function ProjectPage() {
             {/* Funnel Goals — with progress */}
             {memory && (memory.funnel_goals as Record<string, unknown>) && Object.keys(memory.funnel_goals as Record<string,unknown>).length > 0 && (
               <AnimatedContent delay={60}>
-                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                <div className="bg-white border border-white/[0.08] rounded-xl p-5">
                   <h2 className="text-sm font-semibold text-gray-900 mb-3">Funnel Goals</h2>
                   <div className="space-y-3">
                     {Object.entries((memory.funnel_goals as Record<string, unknown>) || {}).map(([stage, data]) => {
@@ -538,7 +538,7 @@ export default function ProjectPage() {
             {/* ICP + Positioning + Tone — key strategy inputs */}
             {memory && (
               <AnimatedContent delay={100}>
-                <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+                <div className="bg-white border border-white/[0.08] rounded-xl p-5 space-y-4">
                   <h2 className="text-sm font-semibold text-gray-900">Strategy Context</h2>
                   {!!(memory.positioning as string) && (
                     <div>
@@ -582,7 +582,7 @@ export default function ProjectPage() {
             {/* Brand Memory — colors, voice, dos/don'ts */}
             {brand && (
               <AnimatedContent delay={140}>
-                <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+                <div className="bg-white border border-white/[0.08] rounded-xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-gray-900">Brand Identity</h2>
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${brand.is_provisional ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
@@ -594,8 +594,8 @@ export default function ProjectPage() {
                       <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Colors</p>
                       <div className="flex gap-2 flex-wrap">
                         {Object.entries(brand.color_palette as Record<string,string>).map(([k, v]) => (
-                          <div key={k} className="flex items-center gap-1.5 bg-gray-50 rounded px-2 py-1 border border-gray-100">
-                            <div className="w-3 h-3 rounded-full border border-gray-200" style={{ background: v }} />
+                          <div key={k} className="flex items-center gap-1.5 bg-gray-50 rounded px-2 py-1 border border-white/[0.06]">
+                            <div className="w-3 h-3 rounded-full border border-white/[0.08]" style={{ background: v }} />
                             <span className="text-xs text-gray-600 capitalize">{k}</span>
                             <span className="text-xs font-mono text-gray-400">{v}</span>
                           </div>
@@ -631,7 +631,7 @@ export default function ProjectPage() {
             {/* Approved / Rejected examples */}
             {memory && ((memory.approved_examples as unknown[]) || []).length > 0 && (
               <AnimatedContent delay={180}>
-                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                <div className="bg-white border border-white/[0.08] rounded-xl p-5">
                   <h2 className="text-sm font-semibold text-gray-900 mb-3">Learning Examples</h2>
                   <div className="space-y-2">
                     {(memory.approved_examples as Array<Record<string,unknown>>).slice(0,3).map((ex, i) => (
@@ -979,7 +979,7 @@ export default function ProjectPage() {
 function Row({ label, value }: { label: string; value: string | undefined }) {
   if (!value) return null
   return (
-    <div className="border-b border-gray-100 pb-2 last:border-0">
+    <div className="border-b border-white/[0.06] pb-2 last:border-0">
       <p className="text-xs text-gray-400">{label}</p>
       <p className="text-sm text-gray-800 mt-0.5">{value}</p>
     </div>

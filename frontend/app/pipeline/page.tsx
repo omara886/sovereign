@@ -65,8 +65,8 @@ function LineagePanel({ assetId, onClose }: { assetId: string; onClose: () => vo
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-80 bg-white border-l border-gray-200 shadow-elevated flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+    <div className="fixed inset-y-0 right-0 z-50 w-80 bg-white border-l border-white/[0.08] shadow-elevated flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
         <p className="text-sm font-semibold text-gray-900">Asset Lineage</p>
         <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded">
           <X size={16} />
@@ -101,7 +101,7 @@ function LineagePanel({ assetId, onClose }: { assetId: string; onClose: () => vo
         )}
       </div>
       {data && (
-        <div className="px-4 py-3 border-t border-gray-100">
+        <div className="px-4 py-3 border-t border-white/[0.06]">
           <Link href={`/inbox`} className="flex items-center justify-center gap-1 w-full text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg py-2 hover:bg-indigo-100 transition-colors">
             Review in Inbox <ChevronRight size={12} />
           </Link>
@@ -152,7 +152,7 @@ function AssetTile({ asset }: { asset: AssetCard }) {
 
   return (
     <Link href={`/inbox?asset=${asset.id}`}>
-      <div className="group bg-white border border-gray-200 rounded-lg p-3 hover:border-gray-300 hover:shadow-card transition-all cursor-pointer">
+      <div className="group bg-white border border-white/[0.08] rounded-lg p-3 hover:border-gray-300 hover:shadow-card transition-all cursor-pointer">
         {/* Project + channel */}
         <div className="flex items-center gap-1.5 mb-2">
           <div className="w-2 h-2 rounded-full shrink-0" style={{ background: projColor }} />
@@ -165,7 +165,7 @@ function AssetTile({ asset }: { asset: AssetCard }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={thumb} alt="" className="w-full aspect-square object-cover rounded mb-2" />
         ) : (
-          <div className="w-full rounded mb-2 p-2 bg-gray-50 border border-gray-100">
+          <div className="w-full rounded mb-2 p-2 bg-gray-50 border border-white/[0.06]">
             {asset.copy_ar ? (
               <p dir="rtl" className="font-arabic text-xs text-gray-800 line-clamp-3 leading-relaxed">{asset.copy_ar}</p>
             ) : (
@@ -221,7 +221,7 @@ function StageColumn({ stage, filter, onSelectAsset }: { stage: Stage; filter: s
           </div>
         ))}
         {assets.length === 0 && (
-          <div className="border border-dashed border-gray-200 rounded-lg h-20 flex items-center justify-center">
+          <div className="border border-dashed border-white/[0.08] rounded-lg h-20 flex items-center justify-center">
             <span className="text-xs text-gray-300">Empty</span>
           </div>
         )}
@@ -275,9 +275,9 @@ export default function PipelinePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div className="min-h-screen bg-[#0D1117]">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-white border-b border-white/[0.08] px-6 py-4">
         <div className="max-w-full mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-base font-semibold text-gray-900">Pipeline Board</h1>

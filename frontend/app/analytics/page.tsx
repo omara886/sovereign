@@ -51,7 +51,7 @@ function MetricCard({ m }: { m: FunnelMetric }) {
     ? Math.min(100, Math.round((m.value / m.target) * 100)) : null
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
+    <div className="bg-white border border-white/[0.08] rounded-lg p-4 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium text-gray-600 leading-tight">{m.label}</p>
         {!m.live && <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">Sample</span>}
@@ -110,8 +110,8 @@ export default function AnalyticsPage() {
   const metrics = SAMPLE_DATA[activeSlug] ?? []
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+    <div className="min-h-screen bg-[#0D1117]">
+      <div className="bg-white border-b border-white/[0.08] px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BarChart3 size={18} className="text-gray-500" />
@@ -147,7 +147,7 @@ export default function AnalyticsPage() {
         )}
 
         {metrics.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+          <div className="bg-white border border-white/[0.08] rounded-xl p-12 text-center">
             <BarChart3 size={28} className="text-gray-300 mx-auto mb-2" />
             <p className="text-sm font-semibold text-gray-700">No metrics configured yet</p>
             <p className="text-xs text-gray-400 mt-1">Run the pipeline first, then connect your analytics integrations</p>

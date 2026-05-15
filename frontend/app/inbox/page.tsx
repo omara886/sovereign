@@ -141,7 +141,7 @@ function AssetPreview({ url, onFail }: { url: string | null; onFail?: () => void
     <img
       src={src}
       alt=""
-      className="w-full aspect-square object-cover rounded-xl border border-gray-200"
+      className="w-full aspect-square object-cover rounded-xl border border-white/[0.08]"
       onError={() => { setBroken(true); onFail?.() }}
     />
   )
@@ -161,7 +161,7 @@ function VariantCard({
       onClick={onSelect}
       disabled={blocked}
       className={`relative w-full text-left rounded-xl border-2 transition-all overflow-hidden ${
-        selected ? 'border-indigo-500 shadow-lg' : 'border-gray-200 hover:border-gray-300'
+        selected ? 'border-indigo-500 shadow-lg' : 'border-white/[0.08] hover:border-gray-300'
       } ${blocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       {/* Selected indicator */}
@@ -259,9 +259,9 @@ function ApprovalCockpit({
   const tonalExplanation = (asset as unknown as Record<string,unknown>)?.tonal_explanation as string | undefined
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-card">
+    <div className="bg-white border border-white/[0.08] rounded-xl overflow-hidden shadow-card">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-100">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: projColor }} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900">{project?.name ?? 'Unknown'}</p>
@@ -332,7 +332,7 @@ function ApprovalCockpit({
         {asset?.copy_ar && (
           <div>
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Arabic Copy</p>
-            <p dir="rtl" className="font-arabic text-sm text-gray-900 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+            <p dir="rtl" className="font-arabic text-sm text-gray-900 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 border border-white/[0.06]">
               {asset.copy_ar}
             </p>
             {cta_ar && <p dir="rtl" className="font-arabic text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 mt-1 w-fit mr-auto">CTA: {cta_ar}</p>}
@@ -341,7 +341,7 @@ function ApprovalCockpit({
         {asset?.copy_en && (
           <div>
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">English Copy</p>
-            <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{asset.copy_en}</p>
+            <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 border border-white/[0.06]">{asset.copy_en}</p>
             {cta_en && <p className="text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 mt-1 w-fit">CTA: {cta_en}</p>}
           </div>
         )}
@@ -377,7 +377,7 @@ function ApprovalCockpit({
         </div>
 
         {/* ── AFTER APPROVAL ──────────────────────────────────────── */}
-        <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100 space-y-1">
+        <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-white/[0.06] space-y-1">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">After approval</p>
           <p className="text-sm text-gray-800">
             <strong>{selectedVariantData?.label ?? 'Selected variant'}</strong> moves to publish queue for{' '}
@@ -398,7 +398,7 @@ function ApprovalCockpit({
             Memory used in generation
           </button>
           {showMemory && (
-            <div className="mt-2 bg-gray-50 rounded-lg border border-gray-100 p-3 space-y-1.5">
+            <div className="mt-2 bg-gray-50 rounded-lg border border-white/[0.06] p-3 space-y-1.5">
               {Object.keys(memorySnapshot).length > 0 ? (
                 Object.entries(memorySnapshot).map(([k, v]) => (
                   <div key={k} className="flex items-center gap-2 text-xs">
@@ -413,7 +413,7 @@ function ApprovalCockpit({
                 <p className="text-xs text-gray-400">Memory snapshot not available for this asset. Run pipeline again to see memory trace.</p>
               )}
               {selectedVariantData?.opencodesign_principles && (
-                <div className="pt-1.5 border-t border-gray-200 mt-1.5">
+                <div className="pt-1.5 border-t border-white/[0.08] mt-1.5">
                   <p className="text-xs font-medium text-indigo-600 mb-1">Open CoDesign principles applied:</p>
                   {selectedVariantData.opencodesign_principles.map((p, i) => (
                     <p key={i} className="text-[11px] text-indigo-500">· {p}</p>
@@ -447,7 +447,7 @@ function ApprovalCockpit({
               onChange={e => setRejectReason(e.target.value)}
               rows={3}
               placeholder="What went wrong? e.g. Wrong tone, too clinical, off-brand visual..."
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-indigo-400 text-gray-800 placeholder:text-gray-400"
+              className="w-full text-sm border border-white/[0.08] rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-indigo-400 text-gray-800 placeholder:text-gray-400"
             />
           </div>
         )}
@@ -477,7 +477,7 @@ function ApprovalCockpit({
               <button
                 onClick={() => setShowReject(true)}
                 disabled={deciding}
-                className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg py-2.5 min-h-[44px] disabled:opacity-40 hover:bg-gray-50 transition-colors"
+                className="flex-1 flex items-center justify-center gap-1.5 border border-white/[0.08] text-gray-700 text-sm font-medium rounded-lg py-2.5 min-h-[44px] disabled:opacity-40 hover:bg-gray-50 transition-colors"
               >
                 <ThumbsDown size={13} /> Reject Both
               </button>
@@ -485,7 +485,7 @@ function ApprovalCockpit({
           </div>
         ) : (
           <div className="flex gap-2">
-            <button onClick={() => { setShowReject(false); setRejectReason('') }} className="flex-none px-4 border border-gray-200 text-gray-600 text-sm rounded-lg py-2.5 hover:bg-gray-50 transition-colors">
+            <button onClick={() => { setShowReject(false); setRejectReason('') }} className="flex-none px-4 border border-white/[0.08] text-gray-600 text-sm rounded-lg py-2.5 hover:bg-gray-50 transition-colors">
               Cancel
             </button>
             <button
@@ -603,7 +603,7 @@ export default function InboxPage() {
   const currentPlan = current?.weekly_plan_id ? plans[current.weekly_plan_id] ?? null : null
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div className="min-h-screen bg-[#0D1117]">
       {/* Toast */}
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-elevated flex items-center gap-2">
@@ -613,7 +613,7 @@ export default function InboxPage() {
       )}
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-white border-b border-white/[0.08] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Inbox size={18} className="text-gray-500" />
@@ -705,7 +705,7 @@ export default function InboxPage() {
                   <button
                     key={approval.id}
                     onClick={() => setActiveIndex(idx)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-white border border-gray-200 shadow-xs' : 'hover:bg-white hover:border-gray-200 border border-transparent'}`}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-white border border-white/[0.08] shadow-xs' : 'hover:bg-white hover:border-white/[0.08] border border-transparent'}`}
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full shrink-0" style={{ background: projColor }} />
@@ -738,7 +738,7 @@ export default function InboxPage() {
                   onReject={(reason) => decide(current.id, 'rejected', reason)}
                 />
               ) : (
-                <div className="bg-white border border-gray-200 rounded-xl h-64 flex items-center justify-center">
+                <div className="bg-white border border-white/[0.08] rounded-xl h-64 flex items-center justify-center">
                   <p className="text-sm text-gray-400">Select an item from the queue</p>
                 </div>
               )}

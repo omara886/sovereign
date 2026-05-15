@@ -5,24 +5,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Light theme tokens
-        bg:       '#FAFAFA',
-        surface:  '#FFFFFF',
-        border:   '#E5E7EB',
-        'border-strong': '#D1D5DB',
+        // Dark theme tokens
+        bg:       '#0D1117',
+        surface:  '#161B22',
+        border:   'rgba(255,255,255,0.08)',
+        'border-strong': 'rgba(255,255,255,0.15)',
         // Text
-        primary:  '#111827',
-        secondary:'#374151',
-        muted:    '#6B7280',
-        disabled: '#9CA3AF',
+        primary:  '#E6EDF3',
+        secondary:'#8B949E',
+        muted:    '#6E7681',
+        disabled: '#484F58',
         // Accent
         indigo:   '#4F46E5',
-        'indigo-hover': '#4338CA',
-        'indigo-soft':  'rgba(79,70,229,0.08)',
+        'indigo-hover': '#6366F1',
+        'indigo-soft':  'rgba(79,70,229,0.12)',
         // Semantic
-        success:  '#10B981',
-        warning:  '#F59E0B',
-        danger:   '#EF4444',
+        success:  '#3FB950',
+        warning:  '#D29922',
+        danger:   '#F85149',
         // Project accents
         therapia:     '#4C1D95',
         qawwi:        '#1D4ED8',

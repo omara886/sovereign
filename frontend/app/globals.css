@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 /**
- * Sovereign Design Tokens — Linear/Notion calm professional style
- * Light theme: #FAFAFA bg, white cards, indigo accent
+ * Sovereign Design Tokens — Dark mode
+ * Dark: #0D1117 bg, #161B22 cards, indigo accent
  * 8pt grid, Inter English, Thmanyah Arabic, IBM Plex Mono for data
  */
 
@@ -12,46 +12,46 @@
 
 :root {
   /* ── Surface ── */
-  --color-background:           #FAFAFA;
-  --color-background-secondary: #F3F4F6;
-  --color-surface:              #FFFFFF;
-  --color-surface-hover:        #F9FAFB;
-  --color-surface-active:       #F3F4F6;
-  --color-surface-muted:        #F9FAFB;
-  --color-surface-elevated:     #FFFFFF;
+  --color-background:           #0D1117;
+  --color-background-secondary: #010409;
+  --color-surface:              #161B22;
+  --color-surface-hover:        #1C2128;
+  --color-surface-active:       #21262D;
+  --color-surface-muted:        #161B22;
+  --color-surface-elevated:     #1C2128;
 
   /* ── Border ── */
-  --color-border:               #E5E7EB;
-  --color-border-muted:         #F3F4F6;
-  --color-border-subtle:        #F3F4F6;
-  --color-border-strong:        #D1D5DB;
+  --color-border:               rgba(255,255,255,0.08);
+  --color-border-muted:         rgba(255,255,255,0.05);
+  --color-border-subtle:        rgba(255,255,255,0.04);
+  --color-border-strong:        rgba(255,255,255,0.15);
 
-  /* ── Accent — indigo (calm, professional) ── */
+  /* ── Accent — indigo ── */
   --color-accent:               #4F46E5;
-  --color-accent-hover:         #4338CA;
-  --color-accent-muted:         #C7D2FE;
-  --color-accent-soft:          rgba(79, 70, 229, 0.08);
-  --color-accent-tint:          rgba(79, 70, 229, 0.06);
-  --color-focus-ring:           rgba(79, 70, 229, 0.4);
+  --color-accent-hover:         #6366F1;
+  --color-accent-muted:         rgba(79, 70, 229, 0.3);
+  --color-accent-soft:          rgba(79, 70, 229, 0.12);
+  --color-accent-tint:          rgba(79, 70, 229, 0.08);
+  --color-focus-ring:           rgba(79, 70, 229, 0.5);
   --color-on-accent:            #FFFFFF;
 
   /* ── Text ── */
-  --color-text-primary:         #111827;
-  --color-text-secondary:       #374151;
-  --color-text-muted:           #6B7280;
-  --color-text-disabled:        #9CA3AF;
+  --color-text-primary:         #E6EDF3;
+  --color-text-secondary:       #8B949E;
+  --color-text-muted:           #6E7681;
+  --color-text-disabled:        #484F58;
 
   /* ── Semantic ── */
-  --color-success:              #10B981;
-  --color-success-bg:           #ECFDF5;
-  --color-success-border:       #A7F3D0;
-  --color-warning:              #F59E0B;
-  --color-warning-bg:           #FFFBEB;
-  --color-warning-border:       #FCD34D;
-  --color-error:                #EF4444;
-  --color-error-bg:             #FEF2F2;
-  --color-error-border:         #FECACA;
-  --color-overlay:              rgba(0, 0, 0, 0.4);
+  --color-success:              #3FB950;
+  --color-success-bg:           rgba(63, 185, 80, 0.08);
+  --color-success-border:       rgba(63, 185, 80, 0.2);
+  --color-warning:              #D29922;
+  --color-warning-bg:           rgba(210, 153, 34, 0.08);
+  --color-warning-border:       rgba(210, 153, 34, 0.2);
+  --color-error:                #F85149;
+  --color-error-bg:             rgba(248, 81, 73, 0.08);
+  --color-error-border:         rgba(248, 81, 73, 0.2);
+  --color-overlay:              rgba(0, 0, 0, 0.6);
 
   /* ── Stage colors (pipeline board) ── */
   --color-stage-strategy:       #4F46E5;   /* indigo */
@@ -153,7 +153,7 @@ html, body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+::-webkit-scrollbar-thumb:hover { background: #6E7681; }
 
 /* ── Mobile: content clears fixed bottom tab ── */
 @media (max-width: 767px) {
