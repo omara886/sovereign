@@ -165,8 +165,9 @@ async def _run_full_pipeline(project_id: str, job_id: str):
                 # Fallback: use first 2 concepts regardless of score
                 selected_concepts = list(all_concepts.values())[:2]
             if not selected_concepts:
-                # Hard fallback: no concepts generated, use tactic metadata
-                selected_concepts = [{"id": "C0", "layout_family": "hero_stat", "story_angle": "default"}]
+                # Hard fallback: guaranteed distinct layouts so tactics never look identical
+                from app.agents.concept_agent import FALLBACK_CONCEPTS
+                selected_concepts = FALLBACK_CONCEPTS[:2]
 
             tactics = (plan.tactics or [])[:max(2, len(selected_concepts))]
             copy_agent = CopyAgent()

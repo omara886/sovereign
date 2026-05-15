@@ -124,6 +124,53 @@ def check_craft_polish(visual_plan: dict, copy_ar: str) -> dict:
     return {"passed": len(issues) == 0, "issues": issues, "points": 15 if not issues else max(0, 15 - len(issues) * 5)}
 
 
+def check_claims(copy_ar: str, copy_en: str) -> dict:
+    """Source attribution — every numeric claim must have a row in claims.csv with source_url and flagged=false."""
+    import csv
+    from pathlib import Path
+
+    issues = []
+    combined = (copy_ar or "") + " " + (copy_en or "")
+
+    # Detect numeric claims in Arabic and English
+    ar_numbers = re.findall(r'[٠-٩0-9]+\s*(?:دقيق[ةة]|دقائق|ثانية|يوم|أيام|أسبوع|مستخدم|شخص|[٪%])', combined)
+    en_numbers = re.findall(r'\b\d+\s*(?:minute|second|day|week|user|person|[%])\b', combined.lower())
+    all_claims = ar_numbers + en_numbers
+
+    if not all_claims:
+        return {"passed": True, "issues": [], "points": 10, "claims_found": 0}
+
+    # Check claims.csv
+    claims_path = Path(__file__).parent.parent.parent / "assets" / "data" / "claims.csv"
+    verified_values: set[str] = set()
+    if claims_path.exists():
+        try:
+            with open(claims_path, newline='', encoding='utf-8') as f:
+                for row in csv.DictReader(f):
+                    flagged = str(row.get('flagged', 'true')).strip().lower()
+                    source = str(row.get('source_url', '')).strip()
+                    if flagged not in ('true', '1') and source:
+                        verified_values.add(str(row.get('numeric_value', '')).strip())
+        except Exception:
+            pass
+
+    for claim in all_claims:
+        # Extract just the number part for lookup
+        num = re.search(r'[٠-٩0-9]+', claim)
+        if num:
+            val = num.group()
+            if val not in verified_values:
+                issues.append(f"Unsourced claim: '{claim}' — add to assets/data/claims.csv with source_url")
+
+    return {
+        "passed": len(issues) == 0,
+        "issues": issues,
+        "points": 10 if not issues else 0,
+        "claims_found": len(all_claims),
+        "blocking": False,  # Warning only for now — becomes blocking in Phase 2
+    }
+
+
 def check_novelty(layout_family: str, style_family: str, recent_layouts: list[str]) -> dict:
     """Penalize repeating the same layout+style combination."""
     key = f"{layout_family}:{style_family}"
@@ -179,22 +226,24 @@ class QAAgentOps(BaseAgent):
 
         # ── Run automated checks ──────────────────────────────────────────────
         arabic_result = run_arabic_qa({"copy_ar": copy_ar, "cta_ar": cta_ar})
-        anti_slop = check_anti_slop(visual_plan, visual_plan.get("generation_prompt", ""))
+        anti_slop   = check_anti_slop(visual_plan, visual_plan.get("generation_prompt", ""))
         composition = check_artifact_composition(visual_plan)
-        typography = check_editorial_typography(visual_plan, copy_ar, copy_en)
-        responsive = check_responsive_layout(visual_plan, channel)
-        craft = check_craft_polish(visual_plan, copy_ar)
-        novelty = check_novelty(layout_family, style_family, recent_layouts or [])
+        typography  = check_editorial_typography(visual_plan, copy_ar, copy_en)
+        responsive  = check_responsive_layout(visual_plan, channel)
+        craft       = check_craft_polish(visual_plan, copy_ar)
+        novelty     = check_novelty(layout_family, style_family, recent_layouts or [])
+        claims      = check_claims(copy_ar, copy_en)  # source attribution check
 
-        # Base score from automated checks
+        # Base score: 90pts from design/layout checks + 10pts from claims
         auto_score = (
             anti_slop["points"] +      # 20pts
             composition["points"] +    # 15pts
             typography["points"] +     # 20pts
             responsive["points"] +     # 10pts
             craft["points"] +          # 15pts
-            novelty["points"]          # 20pts
-        )  # = 100 total
+            novelty["points"] +        # 10pts (was 20, reduced to fit claims)
+            claims["points"]           # 10pts
+        )
 
         # Arabic hard block
         if arabic_result.get("blocked"):
@@ -228,6 +277,7 @@ class QAAgentOps(BaseAgent):
         final_score = max(0, min(100, auto_score - llm_penalty))
 
         blocking = []
+        warnings = []
         for check in [anti_slop, composition, typography, responsive, craft, novelty]:
             blocking.extend(check.get("issues", []))
         if arabic_result.get("issues"):
@@ -236,6 +286,11 @@ class QAAgentOps(BaseAgent):
             blocking.append("Brand voice mismatch")
         if not llm_ok.get("cta_specific_ok"):
             blocking.append("CTA not specific enough")
+        # Claims: warning only (not blocking) in Phase 1 — becomes blocking in Phase 2
+        if claims.get("issues"):
+            warnings.extend(claims["issues"])
+        if llm_ok.get("notes"):
+            warnings.append(llm_ok["notes"])
 
         return {
             "anti_slop_check": anti_slop,
@@ -244,6 +299,7 @@ class QAAgentOps(BaseAgent):
             "responsive_check": responsive,
             "craft_check": craft,
             "novelty_check": novelty,
+            "claims_check": claims,
             "arabic_qa": arabic_result,
             "content_check": llm_ok,
             "compliance_score": final_score,
@@ -252,7 +308,7 @@ class QAAgentOps(BaseAgent):
                 if any(i for i in c.get("issues", []))
             ) and not arabic_result.get("blocked"),
             "blocking_reasons": blocking,
-            "warnings": [n for n in [llm_ok.get("notes", "")] if n],
+            "warnings": warnings,
         }
 
     def _blocked_result(self, base_score, arabic, *checks, blocking):
