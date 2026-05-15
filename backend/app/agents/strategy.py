@@ -129,7 +129,7 @@ class StrategyAgent(BaseAgent):
         }
 
     async def create_plan(self, db: AsyncSession, project_id: str, week_start: date, founder_notes: str | None = None) -> dict:
-        # Pre-fetch memory so DeepSeek (no tool-use) gets context inline
+        from app.utils.skill_rules import content_engine_rules, marketing_psychology_rules
         project_mem = await self._get_project_memory(db, project_id)
         brand_mem = await self._get_brand_memory(db, project_id)
 
@@ -137,7 +137,10 @@ class StrategyAgent(BaseAgent):
             f"Create weekly marketing plan for week_start={week_start}.\n\n"
             f"PROJECT MEMORY:\n{json.dumps(project_mem, default=str, ensure_ascii=False)}\n\n"
             f"BRAND MEMORY:\n{json.dumps(brand_mem, default=str, ensure_ascii=False)}\n\n"
-            "Output ONLY the plan JSON. No explanation."
+            f"--- CONTENT-ENGINE RULES (ENFORCE) ---\n{content_engine_rules()}\n\n"
+            f"--- MARKETING-PSYCHOLOGY (SELECT ONE PER TACTIC) ---\n{marketing_psychology_rules()}\n\n"
+            "For each tactic, include: persuasion_framework field + story_angle field.\n"
+            "Generate 3-5 tactics with DISTINCT story angles. Output ONLY plan JSON."
         )
         if founder_notes:
             msg += f"\nFounder notes: {founder_notes}"

@@ -139,15 +139,29 @@ class CopyAgent(BaseAgent):
         funnel_stage: str,
         language: str = "bilingual",
     ) -> dict:
+        from app.utils.skill_rules import brand_voice_rules, marketing_psychology_rules, content_engine_rules
         project_mem = await self._get_project_memory(db, project_id)
         brand_mem = await self._get_brand_memory(db, project_id)
+
+        # Extract brand voice constraints
+        bm_dict = brand_mem if isinstance(brand_mem, dict) else {}
+        bv_rules = brand_voice_rules(
+            brand_voice=bm_dict.get("brand_voice", ""),
+            dos=bm_dict.get("dos", []),
+            donts=bm_dict.get("donts", []),
+        )
+
         msg = (
             f"Generate {language} marketing copy.\n"
             f"Channel: {channel}. Asset type: {asset_type}. Funnel stage: {funnel_stage}.\n\n"
             f"PROJECT MEMORY:\n{json.dumps(project_mem, default=str, ensure_ascii=False)}\n\n"
             f"BRAND MEMORY:\n{json.dumps(brand_mem, default=str, ensure_ascii=False)}\n\n"
+            f"--- BRAND-VOICE RULES (ENFORCE) ---\n{bv_rules}\n\n"
+            f"--- MARKETING-PSYCHOLOGY (APPLY ONE FRAMEWORK) ---\n{marketing_psychology_rules()}\n\n"
+            f"--- CONTENT-ENGINE COPY RULES ---\n{content_engine_rules()}\n\n"
+            "REQUIRED in output: annotate each copy line with [role: hook|promise|proof|CTA] + [framework: PAS|AIDA|...]\n"
             "Use approved_examples as style reference. Avoid rejected_examples exactly.\n"
-            "Return ONLY valid JSON with: copy_ar, copy_en, cta_ar, cta_en, hashtags_ar, hashtags_en, variants, claim_flags."
+            "Return ONLY valid JSON with: copy_ar, copy_en, cta_ar, cta_en, hashtags_ar, hashtags_en, variants, claim_flags, persuasion_framework."
         )
         result = await self.run(msg, db)
         decoder = json.JSONDecoder()

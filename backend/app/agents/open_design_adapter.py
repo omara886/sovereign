@@ -219,7 +219,14 @@ async def generate_open_design_variant(
             "source": "open-design",
         }
 
-    daemon = settings.OPEN_DESIGN_DAEMON_URL.rstrip("/")
+    daemon = (settings.OPEN_DESIGN_DAEMON_URL or "").strip().rstrip("/")
+    if not daemon or not daemon.startswith("http"):
+        return {
+            "variant": "C", "label": "Open Design",
+            "status": "skipped",
+            "reason": "OPEN_DESIGN_DAEMON_URL not configured (set a valid http:// URL)",
+            "source": "open-design",
+        }
 
     # 1. Health check — fail fast if daemon not running
     try:

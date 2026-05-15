@@ -1,75 +1,183 @@
 {
   "name": "sovereign-content-pipeline",
-  "description": "Sovereign weekly content pipeline — Strategy → Copy → Design → QA → Approval",
-  "version": "1.0.0",
-  "steps": [
+  "description": "9-stage agency-grade pipeline. Skills enforced at every stage. Fails on weak concepts, QA < 80, or novelty violations.",
+  "version": "2.0.0",
+  "schedule": { "cron": "0 7 * * 1", "timezone": "Asia/Riyadh" },
+
+  "stages": [
     {
-      "id": "strategy",
+      "id": "01_strategy",
       "name": "Strategy Agent",
-      "description": "Read project memory, brand data, metric history. Generate weekly plan.",
-      "endpoint": "/api/pipeline/plan/{project_slug}",
-      "method": "POST",
-      "retries": 3,
-      "timeout_seconds": 120,
-      "on_success": "copy",
-      "on_failure": "notify_omar"
+      "module": "app.agents.strategy",
+      "fn": "StrategyAgent.create_plan",
+      "skills_required": ["content-engine", "marketing-psychology"],
+      "skill_enforcement": "content_engine_rules() + marketing_psychology_rules() injected into DeepSeek context",
+      "inputs": ["project_memory", "brand_memory", "brand_brief"],
+      "outputs": ["strategy.json"],
+      "fail_if": ["tactics list is empty", "any tactic missing persuasion_framework field"],
+      "endpoint": "POST /api/pipeline/plan/{project_slug}"
     },
     {
-      "id": "copy",
-      "name": "Copy + Localization Agent",
-      "description": "Generate bilingual copy per tactic. Gulf Saudi Arabic tone. RTL enforced.",
-      "depends_on": ["strategy"],
-      "retries": 2,
-      "timeout_seconds": 90,
-      "on_success": "design",
-      "on_failure": "notify_omar"
+      "id": "02_concept",
+      "name": "Concept Agent",
+      "module": "app.agents.concept_agent",
+      "fn": "ConceptAgent.generate_concepts",
+      "skills_required": ["content-engine", "marketing-psychology"],
+      "skill_enforcement": "Both injected. Concepts must use DISTINCT persuasion frameworks and layout families.",
+      "inputs": ["strategy.json", "brand_memory", "recent_layouts_used"],
+      "outputs": ["concepts.json"],
+      "fail_if": [
+        "all concepts score < 60",
+        "fewer than 3 concepts generated",
+        "two concepts use same layout_family",
+        "block_reason is non-null"
+      ]
     },
     {
-      "id": "design",
-      "name": "Design Agent",
-      "description": "fal.ai scene generation. Thmanyah Arabic overlay. Brand colors applied.",
-      "depends_on": ["copy"],
-      "retries": 3,
-      "timeout_seconds": 180,
-      "on_success": "qa",
-      "on_failure": "notify_omar"
+      "id": "03_copy",
+      "name": "Copy Agent + Localization",
+      "module": "app.agents.copy",
+      "fn": "CopyAgent.generate_copy",
+      "skills_required": ["brand-voice", "marketing-psychology", "content-engine"],
+      "skill_enforcement": "brand_voice_rules() enforced. Every copy line annotated with [role] + [framework].",
+      "inputs": ["strategy.json", "concepts.json", "brand_memory", "project_memory"],
+      "outputs": ["copy_blocks.json"],
+      "fail_if": [
+        "copy_ar is empty",
+        "cta_ar is empty or generic (contains 'اضغط هنا' / 'اعرف أكثر')",
+        "persuasion_framework field missing",
+        "arabic_qa.blocked = true"
+      ]
     },
     {
-      "id": "qa",
-      "name": "QA Agent",
-      "description": "Validate copy tone, check excluded topics, score asset 0-100.",
-      "depends_on": ["design"],
-      "retries": 1,
-      "timeout_seconds": 60,
-      "on_success": "approval",
-      "on_failure": "notify_omar"
+      "id": "04_visual_plan",
+      "name": "Visual Plan Agent",
+      "module": "app.agents.visual_plan_agent",
+      "fn": "VisualPlanAgent.plan",
+      "skills_required": [
+        "artifact-composition",
+        "responsive-layout",
+        "frontend-design-anti-slop",
+        "craft-polish",
+        "editorial-typography"
+      ],
+      "skill_enforcement": "ALL 5 skill rule functions injected as mandatory constraints. Not decoration.",
+      "inputs": ["concepts.json", "copy_blocks.json", "brand_memory"],
+      "outputs": ["visual_plan.json"],
+      "fail_if": [
+        "text_safe_zones is empty",
+        "no_go_rules list is empty",
+        "brand_tokens missing accent_hex or typeface_ar",
+        "layout_family not in allowed families"
+      ]
     },
     {
-      "id": "approval",
-      "name": "Approval Agent",
-      "description": "Notify Omar via email + Telegram. Assets queued in inbox.",
-      "depends_on": ["qa"],
-      "retries": 2,
-      "timeout_seconds": 30,
-      "on_success": "done",
-      "on_failure": "notify_omar"
+      "id": "05_prompt_generation",
+      "name": "DeepSeek Prompt Compiler",
+      "module": "app.agents.design",
+      "fn": "DesignAgent._compile_prompts",
+      "skills_required": ["fal-ai-media", "frontend-design-anti-slop", "craft-polish"],
+      "skill_enforcement": "DeepSeek generates 3 candidates, self-scores (constraint_compliance, novelty, anti_slop_risk), selects best 1-2. Cannot skip visual_plan constraints.",
+      "inputs": ["visual_plan.json", "copy_blocks.json", "strategy.json", "brand_memory"],
+      "outputs": ["prompts.json"],
+      "fail_if": [
+        "selected prompt contains Arabic or Urdu text",
+        "selected prompt missing 'no text, no letters' suffix",
+        "constraint_compliance score < 70",
+        "selected prompt ignores text_safe_zones"
+      ]
     },
     {
-      "id": "notify_omar",
-      "name": "Error Handler",
-      "description": "Send failure details to Omar via Telegram.",
-      "type": "error_handler",
-      "endpoint": "/api/webhook/telegram",
-      "method": "POST"
+      "id": "06_image_generation",
+      "name": "fal.ai Image Generation",
+      "module": "app.tools.fal_tools",
+      "fn": "generate_image_fal",
+      "skills_required": ["fal-ai-media", "social-media-image-sizes"],
+      "skill_enforcement": "Platform dimensions from social-media-image-sizes. Negative prompt from anti-slop rules. NO text in image.",
+      "inputs": ["prompts.json", "visual_plan.json"],
+      "outputs": ["raw_images/"],
+      "fail_if": [
+        "fal.ai returns no images",
+        "image variance < 15 (placeholder/solid color detected)"
+      ],
+      "note": "Generate background ONLY. No text rendered here."
+    },
+    {
+      "id": "07_overlay_and_typesetting",
+      "name": "Arabic/Urdu Overlay (RAQM preferred)",
+      "module": "app.tools.image_tools",
+      "fn": "render_product_showcase | render_infographic",
+      "skills_required": ["editorial-typography"],
+      "skill_enforcement": "editorial_typography_rules() enforced. RAQM path used when available. Reshaper fallback flagged in sidecar.",
+      "inputs": ["raw_images/", "copy_blocks.json", "visual_plan.json", "brand_memory"],
+      "outputs": ["composited_images/"],
+      "fail_if": [
+        "arabic_reshaper used without RAQM AND text appears broken in output",
+        "Arabic text placed outside text_safe_zones"
+      ]
+    },
+    {
+      "id": "08_QA_and_scoring",
+      "name": "QA Agent — 6-check automated gate",
+      "module": "app.agents.qa_agent_ops",
+      "fn": "QAAgentOps.review",
+      "skills_required": [
+        "craft-polish",
+        "frontend-design-anti-slop",
+        "artifact-composition",
+        "editorial-typography",
+        "responsive-layout"
+      ],
+      "skill_enforcement": "5 automated checks run deterministically. Each maps to a specific skill rule. LLM only for brand-voice content check.",
+      "inputs": ["composited_images/", "visual_plan.json", "copy_blocks.json", "brand_memory"],
+      "outputs": ["qa_results.json"],
+      "fail_if": [
+        "compliance_score < 80",
+        "approve_for_design = false",
+        "novelty_check.repeat_count >= 2",
+        "arabic_qa.blocked = true",
+        "anti_slop_check has any issues"
+      ],
+      "on_fail": "Return to 02_concept with blocking_reasons as feedback"
+    },
+    {
+      "id": "09_multi_export",
+      "name": "Multi-Platform Export",
+      "module": "app.tools.image_tools",
+      "fn": "resize_image",
+      "skills_required": ["social-media-image-sizes", "responsive-layout"],
+      "skill_enforcement": "All 6 platform sizes from social-media-image-sizes. Text reflows per responsive-layout.md safe areas. QA re-run at thumbnail size.",
+      "inputs": ["composited_images/", "visual_plan.json"],
+      "outputs": ["exports/{instagram_feed,instagram_portrait,instagram_story,linkedin,x,google_display}/"],
+      "fail_if": [
+        "thumbnail (300px) unreadable — headline too small",
+        "text overflows safe area in any export size"
+      ],
+      "sidecar": "Write {asset}--{platform}.json per export: sha256, dimensions, compliance_score, layout_family, style_family, contains_arabic, raqm_used"
     }
   ],
-  "schedule": {
-    "cron": "0 7 * * 1",
-    "description": "Every Monday at 7am — run full pipeline for all active projects",
-    "timezone": "Asia/Riyadh"
+
+  "skill_to_stage_map": {
+    "content-engine":           ["01_strategy", "02_concept", "03_copy"],
+    "marketing-psychology":     ["01_strategy", "02_concept", "03_copy"],
+    "brand-voice":              ["03_copy"],
+    "artifact-composition":     ["04_visual_plan", "08_QA_and_scoring"],
+    "responsive-layout":        ["04_visual_plan", "08_QA_and_scoring", "09_multi_export"],
+    "frontend-design-anti-slop":["04_visual_plan", "05_prompt_generation", "08_QA_and_scoring"],
+    "craft-polish":             ["04_visual_plan", "08_QA_and_scoring"],
+    "editorial-typography":     ["04_visual_plan", "07_overlay_and_typesetting", "08_QA_and_scoring"],
+    "fal-ai-media":             ["05_prompt_generation", "06_image_generation"],
+    "social-media-image-sizes": ["06_image_generation", "09_multi_export"]
   },
-  "audit": {
-    "table": "audit_events",
-    "log_every_step": true
-  }
+
+  "global_fail_conditions": [
+    "Any required skill not invoked at its required stage",
+    "compliance_score < 80",
+    "novelty_score below threshold (same layout+style used >= 2 times recently)",
+    "brand-voice rules violated (generic CTA, wrong dialect, banned words)",
+    "editorial-typography rules violated (Arabic not RTL, wrong font, too many words)",
+    "Arabic text baked into fal.ai prompt"
+  ],
+
+  "human_gate": "Human sign-off required before 09_multi_export executes. Asset visible in /inbox with all QA scores shown."
 }

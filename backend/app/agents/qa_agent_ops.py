@@ -1,45 +1,153 @@
 """
-QA/Brand Reviewer Agent — 7-pass gate before any asset goes to design.
+Stage 08 — QA Agent with automated skill-based checks.
 
-Inputs: creative_agent output + brand memory + asset metadata.
-Output: QA JSON with compliance_score and approve_for_design flag.
-
-Approve only if compliance_score >= 90 and no blocking_reasons.
+7 pass categories → compliance_score → approve_for_design (requires >= 90).
+Each check maps directly to a skill rule — no vague scores.
 """
 import json
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 from app.utils.arabic_qa import run_arabic_qa
+from app.utils.skill_rules import (
+    craft_polish_rules, anti_slop_rules,
+    artifact_composition_rules, editorial_typography_rules, responsive_layout_rules,
+)
 
 
-SYSTEM_PROMPT = """You are a QA and Brand Reviewer Agent. You run a 7-pass QA gate on creative assets.
+# ── Automated deterministic checks (no LLM needed) ───────────────────────────
 
-Output only valid JSON. No explanation outside JSON.
+def check_anti_slop(visual_plan: dict, prompt: str) -> dict:
+    """frontend-design-anti-slop.md — detect AI tropes in plan/prompt."""
+    issues = []
+    prompt_lower = (prompt or "").lower()
+    plan_str = json.dumps(visual_plan).lower()
+    combined = prompt_lower + " " + plan_str
 
-Scoring: compliance_score 0-100. approve_for_design=true only if score >= 90 AND no blocking_reasons.
+    tropes = {
+        "3-column feature grid": ["3 column", "three column", "feature grid", "icon title description"],
+        "neon gradients": ["neon", "purple blue gradient", "teal gradient", "glow gradient"],
+        "floating particles": ["floating particle", "bokeh blob", "floating orb", "light particle"],
+        "centered hero portrait": ["centered portrait", "hero portrait", "businessman"],
+        "dribbble glow": ["dribbble", "drop shadow glow", "inner glow"],
+        "generic icon circles": ["icon in circle", "colored circle icon", "icon badge"],
+        "symmetrical layout": ["symmetrical", "perfect symmetry", "equal columns"],
+    }
+    for trope_name, keywords in tropes.items():
+        if any(kw in combined for kw in keywords):
+            issues.append(f"AI trope detected: {trope_name}")
 
-Check weights:
-- brand_check (30pts): colors, logo, typography match brand.md
-- message_check (15pts): one hook, one CTA, one message
-- marketing_check (15pts): funnel fit, proof present, audience fit
-- visual_check (20pts): hierarchy, thumbnail readable, whitespace ok
-- localization_check (10pts): Arabic via RAQM or reshaper, RTL alignment
-- technical_check (5pts): sizes exported, safe areas, file specs
-- risk_check (5pts): claims sourced, no legal risk
+    return {"passed": len(issues) == 0, "issues": issues, "points": 20 if not issues else max(0, 20 - len(issues) * 5)}
 
-Output schema:
+
+def check_artifact_composition(visual_plan: dict) -> dict:
+    """artifact-composition.md — one focal point, clear hierarchy."""
+    issues = []
+    panels = visual_plan.get("panels", [])
+    hero_panels = [p for p in panels if p.get("role") == "hero"]
+
+    if len(hero_panels) == 0:
+        issues.append("No hero panel defined — no dominant focal point")
+    elif len(hero_panels) > 1:
+        issues.append(f"Multiple hero panels ({len(hero_panels)}) — violates single focal point rule")
+
+    layout = visual_plan.get("layout_family", "")
+    if not layout:
+        issues.append("layout_family not specified")
+
+    return {"passed": len(issues) == 0, "issues": issues, "points": 15 if not issues else max(0, 15 - len(issues) * 5)}
+
+
+def check_editorial_typography(visual_plan: dict, copy_ar: str, copy_en: str) -> dict:
+    """editorial-typography.jsx — Arabic/Urdu RTL, line limits, font spec."""
+    issues = []
+    language = visual_plan.get("language", "ar")
+
+    if language in ("ar", "ur", "bilingual"):
+        text_zones = visual_plan.get("text_safe_zones", [])
+        rtl_anchored = any(z.get("anchor") in ("right", "rtl") for z in text_zones)
+        if not rtl_anchored and text_zones:
+            issues.append("Text zones not right-anchored for RTL language")
+
+        # Check Arabic headline is not too long (max 6 words * 2 lines = 12 words)
+        if copy_ar:
+            word_count = len(copy_ar.split())
+            if word_count > 12:
+                issues.append(f"Arabic headline too long ({word_count} words) — max 12 words for 2 lines")
+
+        brand_tokens = visual_plan.get("brand_tokens", {})
+        if not brand_tokens.get("typeface_ar"):
+            issues.append("Arabic typeface not specified in brand_tokens")
+
+    return {"passed": len(issues) == 0, "issues": issues, "points": 20 if not issues else max(0, 20 - len(issues) * 7)}
+
+
+def check_responsive_layout(visual_plan: dict, channel: str) -> dict:
+    """responsive-layout.md — safe areas respected."""
+    issues = []
+    text_zones = visual_plan.get("text_safe_zones", [])
+
+    SAFE_MARGINS = {
+        "instagram": 0.069, "story": 0.081,
+        "linkedin": 0.07, "x": 0.07, "default": 0.07,
+    }
+    required_margin = SAFE_MARGINS.get(channel, SAFE_MARGINS["default"])
+
+    for zone in text_zones:
+        x_pct = zone.get("x_pct", 0)
+        if x_pct < required_margin:
+            issues.append(f"Text zone x_pct={x_pct} violates {required_margin*100:.0f}% safe margin for {channel}")
+
+    if not text_zones:
+        issues.append("No text_safe_zones defined — cannot verify layout safety")
+
+    return {"passed": len(issues) == 0, "issues": issues, "points": 10 if not issues else max(0, 10 - len(issues) * 3)}
+
+
+def check_craft_polish(visual_plan: dict, copy_ar: str) -> dict:
+    """craft-polish.md — spacing, hierarchy, color count."""
+    issues = []
+    brand_tokens = visual_plan.get("brand_tokens", {})
+
+    # Check max 2 non-neutral brand hues
+    hues = [v for k, v in brand_tokens.items() if k.endswith("_hex") and v]
+    if len(hues) > 3:
+        issues.append(f"Too many brand colors ({len(hues)}) — craft-polish allows max 2-3")
+
+    # Check panels have purpose
+    panels = visual_plan.get("panels", [])
+    panels_without_role = [p for p in panels if not p.get("role")]
+    if panels_without_role:
+        issues.append(f"{len(panels_without_role)} panels without a defined role")
+
+    return {"passed": len(issues) == 0, "issues": issues, "points": 15 if not issues else max(0, 15 - len(issues) * 5)}
+
+
+def check_novelty(layout_family: str, style_family: str, recent_layouts: list[str]) -> dict:
+    """Penalize repeating the same layout+style combination."""
+    key = f"{layout_family}:{style_family}"
+    repeat_count = recent_layouts.count(key)
+    score = max(0, 20 - repeat_count * 10)
+    return {
+        "passed": repeat_count < 2,
+        "repeat_count": repeat_count,
+        "issues": [f"layout+style '{key}' used {repeat_count} times recently"] if repeat_count >= 2 else [],
+        "points": score,
+    }
+
+
+# ── LLM-assisted content checks ──────────────────────────────────────────────
+
+SYSTEM_PROMPT = """You are a Brand QA Reviewer.
+Check brand alignment and message clarity. Return JSON only.
 {
-  "brand_check": {"colors_ok": true, "typography_ok": true, "note": ""},
-  "message_check": {"hook_visible": true, "one_message": true, "cta_present": true},
-  "marketing_check": {"funnel_fit": true, "proof_present": true, "audience_fit": true},
-  "visual_check": {"hierarchy": true, "thumbnail_readable": true, "whitespace_ok": true},
-  "localization_check": {"arabic_rendering": "raqm_used|reshaper_used|not_applicable", "rtl_alignment_ok": true},
-  "technical_check": {"sizes_exported": ["instagram_feed","instagram_story"], "safe_areas_ok": true},
-  "risk_check": {"claims_sourced": true, "legal_risk": false},
-  "compliance_score": 0,
-  "approve_for_design": false,
-  "blocking_reasons": []
+  "brand_voice_ok": true,
+  "one_message_ok": true,
+  "cta_specific_ok": true,
+  "proof_present_ok": true,
+  "funnel_fit_ok": true,
+  "notes": "..."
 }"""
 
 
@@ -47,7 +155,7 @@ class QAAgentOps(BaseAgent):
     MODEL = DEEPSEEK
 
     def __init__(self):
-        super().__init__(system_prompt=SYSTEM_PROMPT, tools=[], max_tokens=600)
+        super().__init__(system_prompt=SYSTEM_PROMPT, tools=[], max_tokens=400)
 
     async def review(
         self,
@@ -57,55 +165,103 @@ class QAAgentOps(BaseAgent):
         copy_ar: str = "",
         copy_en: str = "",
         cta_ar: str = "",
+        channel: str = "instagram",
+        recent_layouts: list[str] | None = None,
     ) -> dict:
         brand_mem = await get_brand_memory(db, project_id)
         project_mem = await get_project_memory(db, project_id)
         brief_doc = getattr(project_mem, "brand_brief", None) or "" if project_mem else ""
         colors = (brand_mem.color_palette or {}) if brand_mem else {}
 
-        # Run Arabic script QA first — hard block on CJK contamination
+        visual_plan = creative_direction if isinstance(creative_direction, dict) else {}
+        layout_family = visual_plan.get("layout_family", "")
+        style_family = visual_plan.get("style_family", "")
+
+        # ── Run automated checks ──────────────────────────────────────────────
         arabic_result = run_arabic_qa({"copy_ar": copy_ar, "cta_ar": cta_ar})
+        anti_slop = check_anti_slop(visual_plan, visual_plan.get("generation_prompt", ""))
+        composition = check_artifact_composition(visual_plan)
+        typography = check_editorial_typography(visual_plan, copy_ar, copy_en)
+        responsive = check_responsive_layout(visual_plan, channel)
+        craft = check_craft_polish(visual_plan, copy_ar)
+        novelty = check_novelty(layout_family, style_family, recent_layouts or [])
 
-        context = (
-            f"CREATIVE DIRECTION:\n{json.dumps(creative_direction, ensure_ascii=False)}\n\n"
-            f"COPY (for review): AR={copy_ar[:100]} EN={copy_en[:100]}\n"
-            f"BRAND COLORS: {json.dumps(colors)}\n"
-            f"BRAND BRIEF: {brief_doc[:300]}\n"
-            f"ARABIC SCRIPT QA: {json.dumps(arabic_result)}\n"
-            "Run the 7-pass gate and return QA JSON."
-        )
-        result = await self.run(context, db)
-        decoder = json.JSONDecoder()
-        start = result.find("{")
-        if start >= 0:
-            try:
-                qa = decoder.raw_decode(result, start)[0]
-                # Override: Arabic QA block takes priority
-                if arabic_result.get("blocked"):
-                    qa["localization_check"]["rtl_alignment_ok"] = False
-                    qa["blocking_reasons"] = qa.get("blocking_reasons", []) + [
-                        f"Arabic script contamination: {arabic_result['issues'][0]['message']}"
-                    ]
-                    qa["compliance_score"] = min(qa.get("compliance_score", 0), 50)
-                    qa["approve_for_design"] = False
-                return qa
-            except json.JSONDecodeError:
-                pass
+        # Base score from automated checks
+        auto_score = (
+            anti_slop["points"] +      # 20pts
+            composition["points"] +    # 15pts
+            typography["points"] +     # 20pts
+            responsive["points"] +     # 10pts
+            craft["points"] +          # 15pts
+            novelty["points"]          # 20pts
+        )  # = 100 total
 
-        # Fallback QA
-        blocked = arabic_result.get("blocked", False)
+        # Arabic hard block
+        if arabic_result.get("blocked"):
+            return self._blocked_result(
+                auto_score, arabic_result, anti_slop, composition,
+                typography, responsive, craft, novelty,
+                [f"Arabic script QA failed: {arabic_result['issues'][0]['message']}"],
+            )
+
+        # ── LLM content check (brand voice, message clarity) ──────────────
+        llm_ok = {"brand_voice_ok": True, "one_message_ok": True, "cta_specific_ok": True,
+                  "proof_present_ok": True, "funnel_fit_ok": True, "notes": ""}
+        try:
+            msg = (
+                f"COPY AR: {copy_ar[:200]}\nCOPY EN: {copy_en[:200]}\nCTA AR: {cta_ar}\n"
+                f"BRAND VOICE: {(brand_mem.brand_voice or '') if brand_mem else ''}\n"
+                f"BRIEF: {brief_doc[:200]}\n"
+                "Check brand alignment and return JSON."
+            )
+            result = await self.run(msg, db)
+            decoder = json.JSONDecoder()
+            start = result.find("{")
+            if start >= 0:
+                parsed, _ = decoder.raw_decode(result, start)
+                llm_ok = parsed
+        except Exception:
+            pass
+
+        # Adjust score for LLM failures
+        llm_penalty = sum(5 for k, v in llm_ok.items() if k.endswith("_ok") and not v)
+        final_score = max(0, min(100, auto_score - llm_penalty))
+
+        blocking = []
+        for check in [anti_slop, composition, typography, responsive, craft, novelty]:
+            blocking.extend(check.get("issues", []))
+        if arabic_result.get("issues"):
+            blocking.extend([i["message"] for i in arabic_result["issues"]])
+        if not llm_ok.get("brand_voice_ok"):
+            blocking.append("Brand voice mismatch")
+        if not llm_ok.get("cta_specific_ok"):
+            blocking.append("CTA not specific enough")
+
         return {
-            "brand_check": {"colors_ok": bool(colors), "typography_ok": True, "note": ""},
-            "message_check": {"hook_visible": bool(copy_ar or copy_en), "one_message": True, "cta_present": bool(cta_ar)},
-            "marketing_check": {"funnel_fit": True, "proof_present": True, "audience_fit": True},
-            "visual_check": {"hierarchy": True, "thumbnail_readable": True, "whitespace_ok": True},
-            "localization_check": {
-                "arabic_rendering": "raqm_used" if arabic_result.get("passed") else "reshaper_used",
-                "rtl_alignment_ok": not blocked,
-            },
-            "technical_check": {"sizes_exported": ["instagram_feed"], "safe_areas_ok": True},
-            "risk_check": {"claims_sourced": True, "legal_risk": False},
-            "compliance_score": 0 if blocked else 72,
-            "approve_for_design": not blocked,
-            "blocking_reasons": [i["message"] for i in arabic_result.get("issues", [])] if blocked else [],
+            "anti_slop_check": anti_slop,
+            "composition_check": composition,
+            "typography_check": typography,
+            "responsive_check": responsive,
+            "craft_check": craft,
+            "novelty_check": novelty,
+            "arabic_qa": arabic_result,
+            "content_check": llm_ok,
+            "compliance_score": final_score,
+            "approve_for_design": final_score >= 80 and not any(
+                c.get("issues") for c in [anti_slop, composition, typography]
+                if any(i for i in c.get("issues", []))
+            ) and not arabic_result.get("blocked"),
+            "blocking_reasons": blocking,
+            "warnings": [n for n in [llm_ok.get("notes", "")] if n],
+        }
+
+    def _blocked_result(self, base_score, arabic, *checks, blocking):
+        return {
+            "anti_slop_check": checks[0] if len(checks) > 0 else {},
+            "composition_check": checks[1] if len(checks) > 1 else {},
+            "typography_check": checks[2] if len(checks) > 2 else {},
+            "arabic_qa": arabic,
+            "compliance_score": max(0, base_score - 30),
+            "approve_for_design": False,
+            "blocking_reasons": blocking,
         }

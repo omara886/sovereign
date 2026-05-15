@@ -1,15 +1,15 @@
 """
-Design Agent — Template-driven commercial marketing renderer.
+Design Agent — Stage 05: Constrained prompt compilation + Stage 06: Generation.
 
-Architecture:
-  1. DeepSeek writes a SHORT fal.ai prompt for BACKGROUND ONLY (no text, no people preferred)
-  2. fal.ai generates background atmosphere/scene
-  3. Pillow templates compose the final design:
-     - Variant A: Product Showcase (brand frame, Arabic headline, CTA)
-     - Variant B: Infographic Outcome (metric hero, benefit blocks, Arabic headline)
+DeepSeek is now a PROMPT COMPILER, not a freestyle LLM:
+  - Receives: strategy, concept, copy_blocks, visual_plan, + ALL skill rules
+  - Generates 3 candidate prompts, self-scores each, selects best 1-2
+  - Cannot skip constraints or ignore layout/text-safe-zone rules
 
-Arabic text is NEVER baked into fal.ai prompts.
-Arabic is rendered by the app with Thmanyah font + bidi + controlled line lengths.
+Stages:
+  05_prompt_generation  — DeepSeek compiles + self-scores 3 prompts
+  06_image_generation   — fal.ai generates background (no text)
+  07_overlay            — Pillow renders Arabic/Urdu via RAQM
 """
 import asyncio
 import json
@@ -22,6 +22,10 @@ from app.agents.open_design_adapter import generate_open_design_variant
 from app.tools.image_tools import render_product_showcase, render_infographic, create_thumbnail
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 from app.tools.r2_tools import upload_to_r2
+from app.utils.skill_rules import (
+    anti_slop_rules, craft_polish_rules,
+    artifact_composition_rules, responsive_layout_rules,
+)
 
 # ── Permanent negative prompt block (Rule 3 from research) ──────────────────
 # Anti-realism + anti-text-takeover applied to EVERY generation
@@ -42,43 +46,41 @@ NEGATIVE_PROMPT = (
     "blue purple gradient, neon tech background, AI face symmetry"
 )
 
-# ── Variant A: product showcase background (format-first prompting) ──────────
+# ── Stage 05: Constrained Prompt Compiler ─────────────────────────────────────
+# DeepSeek generates 3 candidate prompts, self-scores each, selects best 1-2.
+# Cannot freestyle — all constraints from upstream stages are mandatory.
 
-BACKGROUND_A_PROMPT = """You are a commercial background art director.
-Generate a fal.ai prompt for a BACKGROUND IMAGE ONLY — no text anywhere.
+PROMPT_COMPILER_SYSTEM = """You are a fal.ai prompt compiler for a commercial marketing agency.
+You are NOT allowed to freestyle. You MUST follow all constraints passed to you.
 
-PROMPT ORDER (Rule 4): format → style → layout → subject → palette → exclusions
+YOUR JOB:
+1. Generate exactly 3 candidate prompts for the background image.
+2. Self-score each on: constraint_compliance (0-100), novelty (0-100), anti_slop_risk (lower=better, 0-100).
+3. Select the best 1-2 prompts only.
+4. Write your reasoning.
 
-BACKGROUND DIRECTION (Variant A — product showcase composition):
-- Format: premium brand campaign poster background
-- Visual language: flat 3D illustration hybrid OR editorial product photography
-- Composition: hero object left or center, generous negative space bottom 40% for text overlay
-- Subject: phone/health device OR abstract health-tech visual element, NO people preferred
-- Palette: brand primary dark color dominant, accent as highlight
-- Mood: premium, restrained, contemporary Saudi health-tech brand
+HARD RULES (cannot be bypassed):
+- Every prompt must start with [Format]: e.g. "Infographic: ..." or "Poster: ..."
+- Every prompt must include brand palette hex values.
+- Every prompt must end with: "no text, no letters, no numbers, no watermark, no typography"
+- Every prompt must respect the text_safe_zones — that area must be clear for overlay.
+- NEVER include Arabic, Urdu, or any text in the image prompt.
+- Apply anti-slop negative prompts from the constraints.
 
-Text-safe zone: bottom 45% must be clean dark gradient — Arabic headline goes here.
-
-OUTPUT: fal.ai prompt for background only. Max 90 words. No explanation."""
-
-# ── Variant B: infographic background (format-first prompting) ───────────────
-
-BACKGROUND_B_PROMPT = """You are a commercial background art director.
-Generate a fal.ai prompt for a BACKGROUND IMAGE ONLY — no text anywhere.
-
-PROMPT ORDER (Rule 4): format → style → layout → subject → palette → exclusions
-
-BACKGROUND DIRECTION (Variant B — infographic/data visual):
-- Format: information design poster background, modular editorial grid aesthetic
-- Visual language: geometric vector shapes, abstract data visualization, icon-led composition
-- Composition: structured grid pattern OR abstract circles/arcs suggesting health metrics
-- Subject: abstract geometric forms, no people, no faces, no devices
-- Palette: brand primary color dominant, soft gradient overlay
-- Mood: premium digital health, restrained, systematic, contemporary
-
-The overlay will add a large metric number + Arabic text over this background.
-
-OUTPUT: fal.ai prompt only. Max 90 words. No explanation."""
+Output ONLY valid JSON:
+{
+  "candidates": [
+    {
+      "id": "P1",
+      "prompt": "...",
+      "negative_prompt": "...",
+      "scores": {"constraint_compliance": 0-100, "novelty": 0-100, "anti_slop_risk": 0-100},
+      "reasoning": "..."
+    }
+  ],
+  "selected": ["P1"],
+  "selection_reasoning": "..."
+}"""
 
 PLATFORM_DIMS_FAL = {
     "instagram_post":    {"width": 1080, "height": 1080},
@@ -103,19 +105,76 @@ class DesignAgent(BaseAgent):
     MODEL = DEEPSEEK
 
     def __init__(self):
-        super().__init__(system_prompt=BACKGROUND_A_PROMPT, tools=[], max_tokens=150)
-        self._bg_b_agent = BaseAgent(
-            system_prompt=BACKGROUND_B_PROMPT, tools=[], max_tokens=150
+        super().__init__(system_prompt=PROMPT_COMPILER_SYSTEM, tools=[], max_tokens=900)
+
+    async def _compile_prompts(
+        self,
+        copy_en: str,
+        copy_ar: str,
+        visual_plan: dict,
+        concept: dict,
+        brand_colors: dict,
+        brand_style: str,
+        funnel_stage: str,
+        brief: str,
+        variant_label: str = "A",
+    ) -> tuple[str, str]:
+        """
+        Stage 05: Compile 3 candidate prompts, self-score, return best (prompt, negative_prompt).
+        """
+        primary = brand_colors.get("primary", "#001A4D")
+        accent  = brand_colors.get("accent",  "#4169E1")
+        layout  = visual_plan.get("layout_family", concept.get("layout_family", "hero_stat"))
+        style   = visual_plan.get("style_family", "premium_flat")
+        no_go   = visual_plan.get("no_go_rules", [])
+        text_zones = visual_plan.get("text_safe_zones", [])
+
+        msg = (
+            f"VARIANT: {variant_label}\n"
+            f"FORMAT: {layout}\n"
+            f"STYLE FAMILY: {style}\n"
+            f"FUNNEL STAGE: {funnel_stage}\n"
+            f"BRAND PALETTE: primary={primary}, accent={accent}\n"
+            f"VISUAL STYLE: {brand_style}\n"
+            f"TEXT SAFE ZONES: {json.dumps(text_zones)} — these areas must be CLEAR in the image\n"
+            f"NO-GO RULES: {no_go}\n"
+            f"BRIEF: {brief[:200]}\n"
+            f"COPY CONTEXT (for art direction only — DO NOT put in prompt): AR={copy_ar[:60]} EN={copy_en[:60]}\n\n"
+            f"--- ANTI-SLOP CONSTRAINTS ---\n{anti_slop_rules()}\n\n"
+            f"--- CRAFT-POLISH ---\n{craft_polish_rules()}\n\n"
+            f"--- ARTIFACT-COMPOSITION ---\n{artifact_composition_rules()}\n\n"
+            f"--- RESPONSIVE-LAYOUT ---\n{responsive_layout_rules()}\n\n"
+            "Generate 3 candidate prompts, self-score, select best. Return JSON only."
         )
+
+        try:
+            result = await self.run(msg, None)  # type: ignore
+            decoder = json.JSONDecoder()
+            start = result.find("{")
+            if start >= 0:
+                parsed, _ = decoder.raw_decode(result, start)
+                selected_ids = parsed.get("selected", [])
+                candidates = {c["id"]: c for c in parsed.get("candidates", [])}
+                if selected_ids and selected_ids[0] in candidates:
+                    best = candidates[selected_ids[0]]
+                    return best.get("prompt", ""), best.get("negative_prompt", NEGATIVE_PROMPT)
+        except Exception:
+            pass
+
+        # Fallback prompt if self-scoring fails
+        fallback_prompt = (
+            f"{layout.replace('_',' ').title()}: premium commercial marketing background, "
+            f"{style.replace('_',' ')} aesthetic, brand color {primary} dominant, "
+            f"accent {accent} highlights, clean {int(text_zones[0]['y_pct']*100) if text_zones else 45}% "
+            f"bottom area clear for text overlay, no text, no letters, no watermark"
+        )
+        return fallback_prompt, NEGATIVE_PROMPT
 
     async def _get_bg_prompt(self, agent: BaseAgent, copy_en: str, brand_colors: dict,
                               brand_style: str, funnel_stage: str, brief: str) -> str:
+        """Legacy wrapper — used when no visual_plan is available."""
         primary = brand_colors.get("primary", "#001A4D")
         accent  = brand_colors.get("accent",  "#4169E1")
-
-        # Exact formula from research:
-        # [format] + [subject] + [brand mood] + [palette hint] + [composition with text-safe] +
-        # [material/lighting] + [cleanliness constraints]
         msg = (
             f"Generate a fal.ai background image prompt using this exact structure:\n"
             f"[format] + [subject] + [brand mood] + [palette hint] + "
@@ -215,12 +274,26 @@ class DesignAgent(BaseAgent):
 
             memory_snapshot = self._build_memory_snapshot(brand_mem, project_mem, channel)
 
-            # ── Background prompts (no Arabic text) ──
-            bg_prompt_a = await self._get_bg_prompt(
-                self, copy_en, colors, style, "awareness", brief
+            # ── Stage 05: Constrained prompt compilation ──────────────────
+            # Use visual_plan if available (from full 9-stage pipeline),
+            # otherwise fall back to legacy _get_bg_prompt
+            visual_plan_a = {
+                "layout_family": "hero_stat",
+                "style_family": "premium_flat",
+                "text_safe_zones": [{"y_pct": 0.52, "label": "headline"}],
+                "no_go_rules": ["no text in image", "no neon gradients", "no corporate portraits"],
+            }
+            visual_plan_b = {
+                "layout_family": "bento_grid",
+                "style_family": "minimal_data",
+                "text_safe_zones": [{"y_pct": 0.45, "label": "metric"}],
+                "no_go_rules": ["no text in image", "no generic icons", "no 3-column grids"],
+            }
+            bg_prompt_a, neg_a = await self._compile_prompts(
+                copy_en, copy_ar, visual_plan_a, visual_plan_a, colors, style, "awareness", brief, "A"
             )
-            bg_prompt_b = await self._get_bg_prompt(
-                self._bg_b_agent, copy_en, colors, style, "awareness", brief
+            bg_prompt_b, neg_b = await self._compile_prompts(
+                copy_en, copy_ar, visual_plan_b, visual_plan_b, colors, style, "awareness", brief, "B"
             )
 
             # ── Extract infographic data from copy ──
@@ -236,7 +309,7 @@ class DesignAgent(BaseAgent):
                     bg = await generate_image_fal(
                         bg_prompt_a,
                         FAL_MODEL, w, h,
-                        negative_prompt=NEGATIVE_PROMPT,
+                        negative_prompt=neg_a or NEGATIVE_PROMPT,
                     )
                     final_img = await render_product_showcase(
                         w, h,
@@ -268,7 +341,7 @@ class DesignAgent(BaseAgent):
                     bg = await generate_image_fal(
                         bg_prompt_b,
                         FAL_MODEL, w, h,
-                        negative_prompt=NEGATIVE_PROMPT,
+                        negative_prompt=neg_b or NEGATIVE_PROMPT,
                     )
                     final_img = await render_infographic(
                         w, h,
