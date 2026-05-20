@@ -7,15 +7,15 @@ fal.ai cannot render Arabic. Never ask it to.
 """
 import asyncio
 import json
-import random
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base import BaseAgent, DEEPSEEK
 from app.tools.fal_tools import generate_image_fal
 from app.agents.open_design_adapter import generate_open_design_variant
-from app.tools.image_tools import composite_final_image, create_thumbnail
+from app.tools.image_tools import composite_premium_arabic, create_thumbnail
 from app.tools.memory_tools import get_brand_memory, get_project_memory
+from app.tools.qa_tools import run_final_qa_gate, run_image_qa_gate
 from app.tools.r2_tools import upload_to_r2
 
 THERAPIA_DNA = {
@@ -159,12 +159,6 @@ PLATFORM_DIMS = {
     "google_display":    {"width": 1200, "height": 628},
 }
 
-NEGATIVE_PROMPT = (
-    "text, typography, words, letters, Arabic script, Latin script, numbers, "
-    "watermark, signature, caption, logo, brand name, "
-    "neon gradients, floating particles, cluttered, busy"
-)
-
 OPENCODESIGN_PRINCIPLES = [
     "Layer 1: fal.ai — beautiful visual scene, no text",
     "Layer 2: Pillow — Thmanyah Arabic + RTL + brand colors",
@@ -239,67 +233,93 @@ class DesignAgent(BaseAgent):
             dims = PLATFORM_DIMS.get(platform_key, {"width": 1080, "height": 1080})
             w, h = dims["width"], dims["height"]
 
+            funnel_stage = getattr(project_mem, "funnel_stage", "consideration") if project_mem else "consideration"
+
             memory_snapshot = self._build_memory_snapshot(brand_mem, project_mem, channel)
 
             # ── Variant A: flux/dev + family/lifestyle scene ────────────────
             async def _make_variant_a() -> dict:
                 try:
-                    scene_key = random.choice(["family_lifestyle", "empowerment_portrait"])
-                    scene_prompt = VISUAL_SCENE_PROMPTS[scene_key]
+                    stage = funnel_stage if funnel_stage in FUNNEL_SCENE_TEMPLATES else "awareness"
+                    scene_prompt = compile_scene_prompt(stage, THERAPIA_DNA, platform_key)
                     bg = await generate_image_fal(
                         scene_prompt, "fal-ai/flux/dev", w, h,
-                        negative_prompt=NEGATIVE_PROMPT,
+                        negative_prompt=GLOBAL_NEGATIVE_PROMPT,
+                        num_inference_steps=28,
                     )
+
+                    qa_result = await run_image_qa_gate(bg, min_aesthetic=5.0)
+                    if not qa_result["passed"]:
+                        return {"variant": "A", "status": "qa_failed", "qa": qa_result, "error": qa_result["reason"]}
+
                     final_img = await asyncio.to_thread(
-                        composite_final_image,
+                        composite_premium_arabic,
                         bg, copy_ar, copy_en, cta_ar,
                         brand_colors, logo_bytes, w, h,
+                        layout_pattern=FUNNEL_SCENE_TEMPLATES[stage]["layout_pattern"],
                     )
+
+                    final_qa = await run_final_qa_gate(final_img, copy_ar)
+                    if not final_qa["passed"]:
+                        return {"variant": "A", "status": "final_qa_failed", "qa": final_qa, "error": final_qa["reason"]}
+
                     thumb = await create_thumbnail(final_img)
                     vid = f"{asset_id}_vA"
                     durl = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
                     turl = await upload_to_r2(thumb, f"{vid}_thumb.jpg", "image/jpeg")
                     return {
                         "variant": "A", "label": "Campaign Visual",
-                        "description": f"flux/dev scene ({scene_key}) + Thmanyah Arabic overlay",
+                        "description": f"flux/dev {stage} scene + premium Arabic glass card",
                         "design_url": durl, "thumbnail_url": turl,
-                        "scene_concept": scene_key, "status": "ok",
-                        "source": "flux/dev+pillow",
+                        "funnel_stage": stage, "qa": final_qa, "status": "ok",
+                        "source": "flux/dev+premium-compositor",
+                        "layout_pattern": FUNNEL_SCENE_TEMPLATES[stage]["layout_pattern"],
                         "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
                     }
                 except BaseException as exc:
-                    return {"variant": "A", "label": "Campaign Visual",
-                            "error": str(exc), "status": "failed"}
+                    return {"variant": "A", "status": "failed", "error": str(exc)}
 
             # ── Variant B: Ideogram v2 + data/abstract scene ────────────────
             async def _make_variant_b() -> dict:
                 try:
-                    scene_key = random.choice(["abstract_health", "data_visualization", "product_minimal"])
-                    scene_prompt = VISUAL_SCENE_PROMPTS[scene_key]
+                    stage = "conversion"
+                    scene_prompt = compile_scene_prompt(stage, THERAPIA_DNA, platform_key)
                     bg = await generate_image_fal(
                         scene_prompt, "fal-ai/ideogram/v2", w, h,
-                        negative_prompt=NEGATIVE_PROMPT,
+                        negative_prompt=GLOBAL_NEGATIVE_PROMPT,
+                        num_inference_steps=28,
                     )
+
+                    qa_result = await run_image_qa_gate(bg, min_aesthetic=5.0)
+                    if not qa_result["passed"]:
+                        return {"variant": "B", "status": "qa_failed", "qa": qa_result, "error": qa_result["reason"]}
+
                     final_img = await asyncio.to_thread(
-                        composite_final_image,
+                        composite_premium_arabic,
                         bg, copy_ar, copy_en, cta_ar,
                         brand_colors, logo_bytes, w, h,
+                        layout_pattern=FUNNEL_SCENE_TEMPLATES[stage]["layout_pattern"],
                     )
+
+                    final_qa = await run_final_qa_gate(final_img, copy_ar)
+                    if not final_qa["passed"]:
+                        return {"variant": "B", "status": "final_qa_failed", "qa": final_qa, "error": final_qa["reason"]}
+
                     thumb = await create_thumbnail(final_img)
                     vid = f"{asset_id}_vB"
                     durl = await upload_to_r2(final_img, f"{vid}.jpg", "image/jpeg")
                     turl = await upload_to_r2(thumb, f"{vid}_thumb.jpg", "image/jpeg")
                     return {
                         "variant": "B", "label": "Infographic",
-                        "description": f"Ideogram v2 scene ({scene_key}) + Thmanyah Arabic overlay",
+                        "description": f"Ideogram v2 {stage} scene + premium Arabic glass card",
                         "design_url": durl, "thumbnail_url": turl,
-                        "scene_concept": scene_key, "status": "ok",
-                        "source": "ideogram/v2+pillow",
+                        "funnel_stage": stage, "qa": final_qa, "status": "ok",
+                        "source": "ideogram/v2+premium-compositor",
+                        "layout_pattern": FUNNEL_SCENE_TEMPLATES[stage]["layout_pattern"],
                         "opencodesign_principles": OPENCODESIGN_PRINCIPLES,
                     }
                 except BaseException as exc:
-                    return {"variant": "B", "label": "Infographic",
-                            "error": str(exc), "status": "failed"}
+                    return {"variant": "B", "status": "failed", "error": str(exc)}
 
             variant_a = await _make_variant_a()
             variant_b = await _make_variant_b()
