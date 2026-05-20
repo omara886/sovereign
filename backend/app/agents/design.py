@@ -18,54 +18,137 @@ from app.tools.image_tools import composite_final_image, create_thumbnail
 from app.tools.memory_tools import get_brand_memory, get_project_memory
 from app.tools.r2_tools import upload_to_r2
 
-# ── Visual scene prompts — Rich scenes, NOT dark gradients ────────────────────
-# fal.ai only. No text. No Arabic. Layer 2 (Pillow) handles all text.
-
-VISUAL_SCENE_PROMPTS = {
-    "family_lifestyle": (
-        "Warm lifestyle photography, Saudi family at home, mother checking child health on smartphone, "
-        "soft natural lighting, modern Saudi interior, white and warm tones, "
-        "professional health app promotional style, Apple Health aesthetic, "
-        "bokeh background, genuine caring moment, high quality commercial photography, "
-        "NO text, NO typography, NO Arabic script, NO Latin text anywhere in image, "
-        "clean composition with visual breathing room on left third"
-    ),
-    "product_minimal": (
-        "Clean minimal product visualization, smartphone floating on white background, "
-        "purple gradient glow, health app UI visible on screen, "
-        "geometric purple accent shapes, premium tech aesthetic, "
-        "white and purple color scheme, Apple-style product photography, "
-        "soft shadows, premium commercial quality, "
-        "NO text, NO typography, NO writing of any kind anywhere, "
-        "bottom 40% is lighter for text overlay"
-    ),
-    "empowerment_portrait": (
-        "Confident young Saudi woman looking at phone with relief expression, "
-        "modern Riyadh background softly blurred, warm professional lighting, "
-        "purple and gold color accents in clothing or environment, "
-        "health and wellness visual mood, empowerment feeling, "
-        "high quality portrait photography commercial style, "
-        "NO text, NO signs, NO Arabic or Latin writing anywhere visible"
-    ),
-    "abstract_health": (
-        "Abstract health and wellness background, flowing purple and white organic shapes, "
-        "geometric purple and gold gradient elements, "
-        "clean modern minimal design aesthetic, premium brand visual, "
-        "Saudi healthcare brand mood board style, "
-        "smooth gradients, elegant composition, "
-        "NO text, NO typography, NO words, NO letters of any kind, "
-        "large clear area bottom half for text placement"
-    ),
-    "data_visualization": (
-        "Data visualization aesthetic, purple and white color scheme, "
-        "abstract flowing data streams, circular health metrics visualization, "
-        "modern infographic background elements, premium fintech healthtech style, "
-        "geometric patterns in purple and gold, "
-        "clean professional background, "
-        "NO text, NO numbers, NO Arabic, NO Latin characters, "
-        "clear space on left 40% for Arabic text overlay"
-    ),
+THERAPIA_DNA = {
+    "brand": "Therapia",
+    "visual_principles": [
+        "calm not sleepy",
+        "Saudi contemporary",
+        "premium wellness not hospital",
+        "human privacy no exaggeration",
+    ],
+    "approved_locations": [
+        "Riyadh apartment morning",
+        "Saudi office lounge",
+        "modern family living room",
+        "private consultation room",
+        "youth study desk at blue hour",
+    ],
+    "materials": ["linen", "ceramic", "limestone", "walnut", "brass", "frosted glass", "fabric", "dark wood"],
+    "lighting": [
+        "soft Riyadh sunrise through sheer curtains",
+        "warm evening lamp light",
+        "blue hour window",
+        "late afternoon golden office glass",
+    ],
+    "palette": {"primary": "#0F3D3E", "secondary": "#D7B98E", "accent_hint": "deep green reflection"},
+    "camera": [
+        "50mm lens",
+        "85mm lens",
+        "35mm lens",
+        "shallow depth of field",
+        "realistic premium commercial editorial photography",
+    ],
+    "avoid": [
+        "hospital",
+        "sad patient",
+        "generic wellness",
+        "Western therapy cliché",
+        "camels",
+        "random desert",
+        "random mosque",
+        "doctor coat",
+        "therapy couch",
+    ],
 }
+
+FUNNEL_SCENE_TEMPLATES = {
+    "awareness": {
+        "description": "Brand impression, emotional, no offer",
+        "visual_territory": "centered statement or architectural negative space",
+        "scene": "A quiet morning corner in a contemporary Riyadh apartment. A phone rests face-down beside a ceramic Arabic coffee cup, folded notebook, soft linen, and small brass lamp. No people. Calm private atmosphere suggesting online therapy just happened.",
+        "saudi_context": "Modern Saudi home, limestone wall, subtle Najdi-inspired shadow pattern, warm hospitality objects, no clichés, no desert, no camels, no mosque.",
+        "composition": "4:5 vertical. Main visual weight lower-left. Natural negative space upper-right created by sunlit wall texture, curtain shadow, and warm light falloff. Negative space must feel photographic not empty.",
+        "lighting": "Soft Riyadh sunrise through sheer curtains, warm highlights, gentle shadows.",
+        "materials": "limestone, ceramic, linen, walnut, brushed brass",
+        "palette": "Warm ivory, sand, muted clay, date brown, deep green accent only as small reflection.",
+        "camera": "50mm lens, shallow depth of field, editorial commercial photography, tactile realism, natural grain.",
+        "layout_pattern": "architectural_negative_space",
+    },
+    "consideration": {
+        "description": "Show product in context, build trust",
+        "visual_territory": "editorial lifestyle or luxury still life",
+        "scene": "An elegant Saudi living room after dinner. Two Arabic coffee cups on a side table, soft throw blanket, phone placed near edge, warm lamp in background. Scene feels calm family home, private.",
+        "saudi_context": "Contemporary majlis-inspired living room, modern Saudi luxury, subtle geometric wall shadow, warm hospitality, no tourist clichés.",
+        "composition": "4:5 vertical. Foreground detail lower-right. Natural negative space upper-left from warm wall texture and soft shadow. Objects frame the empty zone naturally.",
+        "lighting": "Evening indoor light, lamp glow, soft falloff, warm but not yellow.",
+        "materials": "fabric, ceramic, brass, dark wood, stone",
+        "palette": "Cream, date brown, muted gold, stone gray, deep green accent.",
+        "camera": "65mm lens, close editorial still life, realistic texture, premium advertising photography.",
+        "layout_pattern": "object_framed",
+    },
+    "conversion": {
+        "description": "Clear offer, clear CTA, action now",
+        "visual_territory": "architectural negative space for clean composition",
+        "scene": "A refined private consultation room represented through objects only: comfortable chair edge, tissue box, water glass, notebook, phone, soft lamp, textured wall. No doctor, no patient.",
+        "saudi_context": "Contemporary Saudi wellness interior, subtle Gulf hospitality design, premium privacy, believable professional setting.",
+        "composition": "1:1 square. Objects arranged right half. Natural negative space left third created by softly lit textured wall and plant shadow.",
+        "lighting": "Warm evening lamp light, gentle ambient fill, premium contrast.",
+        "materials": "stone, linen, ceramic, frosted glass, dark wood",
+        "palette": "Ivory, warm beige, olive-gray, terracotta, soft dark green.",
+        "camera": "85mm lens, low angle, shallow depth of field, luxury healthcare still life photography.",
+        "layout_pattern": "glass_card",
+    },
+    "retention": {
+        "description": "Warmth, belonging, ongoing relationship",
+        "visual_territory": "quiet recovery or family warmth",
+        "scene": "A teenager's study desk in a Saudi home at blue hour. Headphones, closed journal, school materials with no readable text, desk lamp, phone resting face-down. Room feels safe and lived-in.",
+        "saudi_context": "Modern Saudi family home, realistic study setup, subtle Arabic books on shelf but no readable text, contemporary youth environment.",
+        "composition": "9:16 story layout. Desk objects in bottom-right. Natural negative space in top-left created by dim wall, shelf blur, and lamp falloff.",
+        "lighting": "Warm desk lamp mixed with blue hour window light, cinematic but realistic.",
+        "materials": "wood desk, paper, matte headphones, soft fabric, glass",
+        "palette": "Warm walnut, cream, muted navy, soft green accent.",
+        "camera": "35mm lens, slight overhead crop, editorial lifestyle photography, realistic commercial finish.",
+        "layout_pattern": "editorial_side",
+    },
+}
+
+GLOBAL_NEGATIVE_PROMPT = (
+    "plain gradient, empty background, dark bottom gradient, black overlay, "
+    "generic stock photo, corporate template, Canva template, 2010 social media ad, "
+    "fake premium, overused bokeh, plastic skin, over-smoothed faces, "
+    "fake Arabic text, gibberish letters, readable text, watermark, logo, poster mockup, "
+    "app UI, distorted hands, extra fingers, duplicated people, uncanny face, "
+    "random mosque, camel, desert stereotype, tourist cliché, "
+    "doctor coat, hospital bed, therapy couch cliché, sad crying person, exaggerated emotion, "
+    "low resolution, blurry, overexposed, underexposed, excessive glow, cheap neon"
+)
+
+
+def compile_scene_prompt(funnel_stage: str, brand_dna: dict, platform: str) -> str:
+    """Compile 11-part premium prompt from brand DNA + funnel stage."""
+    template = FUNNEL_SCENE_TEMPLATES.get(funnel_stage, FUNNEL_SCENE_TEMPLATES["consideration"])
+    ratio_map = {
+        "instagram_post": "1:1 square",
+        "instagram_portrait": "4:5 vertical",
+        "instagram_story": "9:16 vertical story",
+        "linkedin_post": "1.91:1 horizontal",
+        "x_post": "16:9 horizontal",
+    }
+    ratio = ratio_map.get(platform, "4:5 vertical")
+
+    return (
+        "Premium commercial campaign image for Therapia, a Saudi digital mental wellness app. "
+        f"Strategic idea: {template['description']}. "
+        f"Scene: {template['scene']} "
+        f"Saudi authenticity: {template['saudi_context']} "
+        f"Composition: {ratio} editorial layout. {template['composition']} "
+        f"Lighting: {template['lighting']} "
+        f"Materials: {template['materials']}. "
+        f"Palette: {template['palette']} "
+        f"Camera: {template['camera']}. "
+        "Quality: Apple-level restraint, premium wellness brand, emotionally intelligent, cinematic but believable. "
+        "NO text, NO logo, NO watermark, NO fake Arabic letters, NO app UI, NO hospital, NO doctor, NO sad patient, NO therapy couch cliché."
+    )
 
 PLATFORM_DIMS = {
     "instagram_post":    {"width": 1080, "height": 1080},
