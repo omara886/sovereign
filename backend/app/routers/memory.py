@@ -39,7 +39,9 @@ async def patch_memory(project_ref: str, payload: ProjectMemoryUpdate, db: Async
     project_id = await _resolve_project_id(project_ref, db)
     obj = (await db.execute(select(ProjectMemory).where(ProjectMemory.project_id == project_id))).scalar_one_or_none()
     if not obj:
-        raise HTTPException(404, "memory not found")
+        # Auto-create memory record if it doesn't exist yet
+        obj = ProjectMemory(project_id=project_id)
+        db.add(obj)
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(obj, k, v)
     await db.commit()

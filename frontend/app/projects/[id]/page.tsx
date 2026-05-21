@@ -88,6 +88,7 @@ export default function ProjectPage() {
   const [brief, setBrief] = useState('')
   const [briefSaving, setBriefSaving] = useState(false)
   const [briefSaved, setBriefSaved] = useState(false)
+  const [briefError, setBriefError] = useState('')
   const [analyticsError, setAnalyticsError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const hasPlan = Boolean(currentPlan)
@@ -97,6 +98,22 @@ export default function ProjectPage() {
     currentPlan?.status === 'executing' ||
     currentPlan?.status === 'done'
   )
+
+  const saveBrief = useCallback(async (text: string) => {
+    if (!text.trim()) return
+    setBriefSaving(true)
+    setBriefError('')
+    try {
+      const r = await fetch(`${API}/projects/${slug}/memory`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_brief: text }),
+      })
+      if (r.ok) { setBriefSaved(true) }
+      else { setBriefError(`Save failed (${r.status}) — try again`) }
+    } catch { setBriefError('Save failed — check connection') }
+    finally { setBriefSaving(false) }
+  }, [slug])
 
   const load = useCallback(async () => {
     try {
@@ -294,7 +311,8 @@ export default function ProjectPage() {
 
               <textarea
                 value={brief}
-                onChange={e => { setBrief(e.target.value); setBriefSaved(false) }}
+                onChange={e => { setBrief(e.target.value); setBriefSaved(false); setBriefError('') }}
+                onBlur={e => { if (e.target.value.trim()) saveBrief(e.target.value) }}
                 rows={24}
                 placeholder={`# ${slug.charAt(0).toUpperCase() + slug.slice(1)} Brand Guide\n\n## Colors\nprimary: #001A4D\naccent: #4169E1\n\n## Typography\nArabic: Thmanyah Sans Black (headlines)\nEnglish: Inter\n\n## Tone\nGulf Saudi dialect, warm, direct...\n\n## Target Audience\n...\n\n## Positioning\n...\n\n## Arabic Rules\nGulf dialect only. No فصحى...\n\n## Do\n- ...\n\n## Don't\n- ...`}
                 className="w-full mt-3 bg-gray-50 border border-white/[0.08] focus:border-indigo-400 rounded-lg px-4 py-3 font-mono text-xs text-gray-800 resize-none outline-none transition-colors leading-relaxed placeholder:text-gray-400"
@@ -304,22 +322,13 @@ export default function ProjectPage() {
               <div className="flex items-center justify-between mt-3">
                 <p className="text-xs text-gray-400 font-mono">{brief.length.toLocaleString()} chars</p>
                 <div className="flex items-center gap-2">
-                  {briefSaved && (
+                  {briefError && <span className="text-xs text-red-600 font-medium">{briefError}</span>}
+                  {briefSaved && !briefError && (
                     <span className="text-xs text-emerald-600">Saved — agents will use this on next run</span>
                   )}
                   <button
                     disabled={briefSaving}
-                    onClick={async () => {
-                      setBriefSaving(true)
-                      try {
-                        const r = await fetch(`${API}/projects/${slug}/memory`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ brand_brief: brief }),
-                        })
-                        if (r.ok) setBriefSaved(true)
-                      } finally { setBriefSaving(false) }
-                    }}
+                    onClick={() => saveBrief(brief)}
                     className="flex items-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-lg min-h-[40px] disabled:opacity-40 transition-colors"
                   >
                     {briefSaving ? <Loader2 size={13} className="animate-spin" /> : briefSaved ? <Check size={13} /> : null}
@@ -473,7 +482,8 @@ export default function ProjectPage() {
                 </div>
                 <textarea
                   value={brief}
-                  onChange={e => { setBrief(e.target.value); setBriefSaved(false) }}
+                  onChange={e => { setBrief(e.target.value); setBriefSaved(false); setBriefError('') }}
+                  onBlur={e => { if (e.target.value.trim()) saveBrief(e.target.value) }}
                   rows={7}
                   placeholder={`## What we do\nTherapia is a mental wellness platform...\n\n## Visual direction\nNavy blue (#001A4D) primary, electric blue (#4169E1) accent...\n\n## Tone\nWarm, professional, never clinical...\n\n## Target audience\nSaudi professionals 25-45, urban, health-conscious...`}
                   className="w-full bg-gray-50 border border-white/[0.08] focus:border-indigo-400 rounded-lg px-3 py-2.5 font-mono text-xs text-gray-800 resize-none outline-none transition-colors leading-relaxed placeholder:text-gray-400"
@@ -481,24 +491,17 @@ export default function ProjectPage() {
                 />
                 <div className="flex items-center justify-between mt-2.5">
                   <p className="text-xs text-gray-400">{brief.length} chars</p>
+                  <div className="flex items-center gap-2">
+                    {briefError && <span className="text-xs text-red-600">{briefError}</span>}
                   <button
                     disabled={briefSaving}
-                    onClick={async () => {
-                      setBriefSaving(true)
-                      try {
-                        const r = await fetch(`${API}/projects/${slug}/memory`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ brand_brief: brief }),
-                        })
-                        if (r.ok) setBriefSaved(true)
-                      } finally { setBriefSaving(false) }
-                    }}
+                    onClick={() => saveBrief(brief)}
                     className="flex items-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg min-h-[36px] disabled:opacity-40 transition-colors"
                   >
                     {briefSaving ? <Loader2 size={13} className="animate-spin" /> : briefSaved ? <Check size={13} /> : null}
-                    {briefSaving ? 'Saving...' : briefSaved ? 'Saved' : 'Save Brief'}
+                    {briefSaving ? 'Saving...' : briefSaved ? 'Saved ✓' : 'Save Brief'}
                   </button>
+                  </div>
                 </div>
               </div>
             </AnimatedContent>
