@@ -33,7 +33,10 @@ async def run_image_qa_gate(image_bytes: bytes, min_aesthetic: float = 5.0) -> d
             img = Image.open(BytesIO(image_bytes)).convert("RGB")
             px = preprocessor(images=img, return_tensors="pt").pixel_values
             with torch.inference_mode():
-                score = float(model(px).item())
+                out = model(px)
+                # API may return logits tensor directly or an object with .logits
+                raw = out.logits if hasattr(out, "logits") else out
+                score = float(raw.squeeze().item())
             result["scores"]["aesthetic"] = score
             if score < min_aesthetic:
                 result["passed"] = False
@@ -72,13 +75,26 @@ async def run_final_qa_gate(final_bytes: bytes, expected_arabic: str) -> dict:
         result = {"passed": True, "scores": {}, "reason": None}
 
         try:
-            from kontrasto import wcag_3
-
+            # WCAG 2.1 relative luminance — no external dep needed
+            import numpy as np
             img = Image.open(BytesIO(final_bytes)).convert("RGB")
-            contrast = wcag_3.wcag3_contrast_light_or_dark(img, "#ffffff", "#000000")
-            result["scores"]["contrast"] = contrast
-        except ImportError:
-            result["scores"]["contrast"] = "skipped_no_kontrasto"
+            arr = np.array(img, dtype=float) / 255.0
+            # sRGB → linear
+            lin = np.where(arr <= 0.04045, arr / 12.92, ((arr + 0.055) / 1.055) ** 2.4)
+            luminance = 0.2126 * lin[:, :, 0] + 0.7152 * lin[:, :, 1] + 0.0722 * lin[:, :, 2]
+            # Sample text zone (bottom-right quadrant where text lands)
+            h_, w_ = luminance.shape
+            zone = luminance[h_ // 2:, w_ // 2:]
+            bg_lum = float(zone.mean())
+            # White text contrast ratio vs background
+            contrast_ratio = (1.05) / (bg_lum + 0.05)
+            result["scores"]["contrast_ratio"] = round(contrast_ratio, 2)
+            result["scores"]["bg_luminance"] = round(bg_lum, 3)
+            # WCAG AA large text: ratio >= 3:1; AA normal: >= 4.5:1
+            if contrast_ratio < 3.0:
+                result["passed"] = False
+                result["reason"] = f"Text contrast ratio {contrast_ratio:.1f} < 3.0 (WCAG AA large)"
+                return result
         except Exception as exc:
             result["scores"]["contrast"] = f"skipped_contrast_error:{type(exc).__name__}"
 

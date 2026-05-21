@@ -21,8 +21,8 @@ SQLAlchemy==2.0.36
 uvicorn[standard]==0.32.0
 
 # Quality gates
-aesthetic-predictor-v2-5>=1.0.0
+# aesthetic-predictor-v2-5>=1.0.0  # optional: needs HuggingFace + GPU/CPU torch
 easyocr>=1.7.1
-kontrasto>=1.0.0
+# kontrasto: v0.1.0 has no usable API; WCAG contrast computed inline in qa_tools.py
 opencv-python-headless>=4.9.0
 numpy>=1.24.0
