@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Install all deps EXCEPT Pillow first (cached layer)
-RUN pip install --no-cache-dir $(grep -iv 'pillow' requirements.txt | tr '\n' ' ')
+RUN pip install --no-cache-dir $(grep -iv 'pillow' requirements.txt | grep -v '^\s*#' | grep -v '^\s*$' | tr '\n' ' ')
 
 # Rebuild Pillow from source with libraqm support
 # If this fails, Railway will retry; previous layers cached
