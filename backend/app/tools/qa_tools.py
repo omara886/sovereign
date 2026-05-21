@@ -1,132 +1,81 @@
 """
 Quality gate pipeline for generated images.
-Gate 1: Aesthetic score >= threshold (aesthetic-predictor-v2-5)
-Gate 2: Contrast check (kontrasto WCAG3)
-Gate 3: OCR — no fake text in background
-Gate 4: OCR — Arabic text legible post-compositing
+
+Production gates (fast, zero model downloads):
+  Gate 1: Pixel sanity — rejects blank/solid images
+  Gate 2: WCAG contrast check — pure PIL/numpy, instant
+
+Heavy gates DISABLED in production:
+  EasyOCR downloads ~1.5GB models on first call and hangs Railway cold starts.
+  Aesthetic predictor also requires large model download.
+  These were causing 10+ minute hangs. Re-enable only on persistent GPU infra.
 """
 
 import asyncio
-import difflib
 import re
 from io import BytesIO
 
+import numpy as np
 from PIL import Image
 
 
 def _normalize_arabic(text: str) -> str:
-    return re.sub(r"[^\u0600-\u06FF\s]", "", text).strip()
+    return re.sub(r"[^؀-ۿ\s]", "", text).strip()
 
 
 async def run_image_qa_gate(image_bytes: bytes, min_aesthetic: float = 5.0) -> dict:
-    """Run QA on raw generated image (before Arabic overlay)."""
-
+    """
+    Fast pre-composite QA. No model downloads.
+    Rejects blank/solid-color images (fal.ai failure mode).
+    """
     def _check():
         result = {"passed": True, "scores": {}, "reason": None}
-
         try:
-            import torch
-            from aesthetic_predictor_v2_5 import convert_v2_5_from_siglip
-
-            model, preprocessor = convert_v2_5_from_siglip(low_cpu_mem_usage=True, trust_remote_code=True)
-            model.eval()
             img = Image.open(BytesIO(image_bytes)).convert("RGB")
-            px = preprocessor(images=img, return_tensors="pt").pixel_values
-            with torch.inference_mode():
-                out = model(px)
-                # API may return logits tensor directly or an object with .logits
-                raw = out.logits if hasattr(out, "logits") else out
-                score = float(raw.squeeze().item())
-            result["scores"]["aesthetic"] = score
-            if score < min_aesthetic:
+            arr = np.array(img, dtype=float)
+            std = float(arr.std())
+            result["scores"]["pixel_std"] = round(std, 2)
+            if std < 8.0:
                 result["passed"] = False
-                result["reason"] = f"Aesthetic score {score:.2f} < {min_aesthetic}"
+                result["reason"] = f"Image is blank/solid (pixel std={std:.1f} < 8)"
                 return result
-        except ImportError:
-            result["scores"]["aesthetic"] = "skipped_no_model"
         except Exception as exc:
-            result["scores"]["aesthetic"] = f"skipped_model_error:{type(exc).__name__}"
+            result["scores"]["pixel_check"] = f"skipped:{type(exc).__name__}"
 
-        try:
-            import easyocr
-
-            reader = easyocr.Reader(["ar", "en"], gpu=False)
-            texts = reader.readtext(image_bytes, detail=0)
-            if texts:
-                result["passed"] = False
-                result["reason"] = f"Background contains text: {texts[:3]}"
-                result["scores"]["ocr_background"] = texts
-                return result
-            result["scores"]["ocr_background"] = "clean"
-        except ImportError:
-            result["scores"]["ocr_background"] = "skipped_no_easyocr"
-        except Exception as exc:
-            result["scores"]["ocr_background"] = f"skipped_ocr_error:{type(exc).__name__}"
-
+        result["scores"]["aesthetic"] = "skipped_no_model_in_prod"
+        result["scores"]["ocr_background"] = "skipped_no_model_in_prod"
         return result
 
     return await asyncio.to_thread(_check)
 
 
 async def run_final_qa_gate(final_bytes: bytes, expected_arabic: str) -> dict:
-    """Run QA on final composited image (after Arabic overlay)."""
-
+    """
+    Fast post-composite QA. WCAG contrast check only — no model downloads.
+    OCR gate removed: EasyOCR model download hangs Railway on every cold start.
+    """
     def _check():
         result = {"passed": True, "scores": {}, "reason": None}
 
         try:
-            # WCAG 2.1 relative luminance — no external dep needed
-            import numpy as np
             img = Image.open(BytesIO(final_bytes)).convert("RGB")
             arr = np.array(img, dtype=float) / 255.0
-            # sRGB → linear
             lin = np.where(arr <= 0.04045, arr / 12.92, ((arr + 0.055) / 1.055) ** 2.4)
             luminance = 0.2126 * lin[:, :, 0] + 0.7152 * lin[:, :, 1] + 0.0722 * lin[:, :, 2]
-            # Sample text zone (bottom-right quadrant where text lands)
             h_, w_ = luminance.shape
             zone = luminance[h_ // 2:, w_ // 2:]
             bg_lum = float(zone.mean())
-            # White text contrast ratio vs background
-            contrast_ratio = (1.05) / (bg_lum + 0.05)
+            contrast_ratio = 1.05 / (bg_lum + 0.05)
             result["scores"]["contrast_ratio"] = round(contrast_ratio, 2)
             result["scores"]["bg_luminance"] = round(bg_lum, 3)
-            # WCAG AA large text: ratio >= 3:1; AA normal: >= 4.5:1
             if contrast_ratio < 3.0:
                 result["passed"] = False
                 result["reason"] = f"Text contrast ratio {contrast_ratio:.1f} < 3.0 (WCAG AA large)"
                 return result
         except Exception as exc:
-            result["scores"]["contrast"] = f"skipped_contrast_error:{type(exc).__name__}"
+            result["scores"]["contrast"] = f"skipped:{type(exc).__name__}"
 
-        try:
-            import easyocr
-
-            reader = easyocr.Reader(["ar", "en"], gpu=False)
-            texts = reader.readtext(final_bytes, detail=0)
-            parsed = _normalize_arabic(" ".join(texts))
-            key_words = [_normalize_arabic(w) for w in expected_arabic.split()[:2] if len(w) > 2]
-            parsed_tokens = [t for t in parsed.split() if len(t) > 1]
-            found = False
-            for kw in key_words:
-                if kw in parsed:
-                    found = True
-                    break
-                for token in parsed_tokens:
-                    if difflib.SequenceMatcher(None, kw, token).ratio() >= 0.6:
-                        found = True
-                        break
-                if found:
-                    break
-            result["scores"]["ocr_arabic_legible"] = found
-            if not found and expected_arabic.strip():
-                result["passed"] = False
-                result["reason"] = f"Arabic text not detected by OCR: {expected_arabic[:30]}"
-                return result
-        except ImportError:
-            result["scores"]["ocr_arabic_legible"] = "skipped_no_easyocr"
-        except Exception as exc:
-            result["scores"]["ocr_arabic_legible"] = f"skipped_ocr_error:{type(exc).__name__}"
-
+        result["scores"]["ocr_arabic_legible"] = "skipped_no_model_in_prod"
         return result
 
     return await asyncio.to_thread(_check)
