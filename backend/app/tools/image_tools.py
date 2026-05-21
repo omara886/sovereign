@@ -3,15 +3,14 @@ Image tools — Layer 2 of the design pipeline.
 
 Architecture (non-negotiable):
   Layer 1: fal.ai generates BEAUTIFUL VISUAL SCENE — no text, no Arabic
-  Layer 2: Pillow overlays ALL text using Noto Naskh Arabic + arabic_reshaper
+  Layer 2: Pillow overlays ALL text using Noto Naskh Arabic
 
-WHY Noto Naskh Arabic instead of Thmanyah for Arabic text:
-  Thmanyah is an OpenType font designed for HarfBuzz/CoreText rendering engines.
-  PIL uses raw glyph lookup — it cannot execute OpenType GSUB shaping rules.
-  Thmanyah is missing 8+ critical Arabic presentation form codepoints (U+FE70-FEFF)
-  that arabic_reshaper produces, causing blank squares in rendered text.
-  Noto Naskh Arabic has complete presentation form coverage (141 glyphs) — zero missing.
-  Thmanyah still used for Latin/English subheads where it renders correctly.
+Arabic rendering strategy — RAQM-aware:
+  Railway Dockerfile builds Pillow with libraqm (HarfBuzz + FriBiDi).
+  When RAQM is present, Pillow handles shaping + bidi internally.
+  If we ALSO apply arabic_reshaper + bidi manually, the text gets double-reversed → "رمع".
+  Fix: detect RAQM at startup. When available, pass raw Arabic + direction='rtl'.
+  When not available (local dev without libraqm), use arabic_reshaper + bidi as fallback.
 """
 import asyncio
 import io
@@ -21,21 +20,24 @@ from pathlib import Path
 
 import arabic_reshaper
 from bidi.algorithm import get_display
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, features as pil_features
 
 _FONT_BASE = Path(__file__).parent.parent.parent / "assets" / "fonts" / "thmanyah typeface" / "thmanyahsans" / "otf"
 _NOTO_BASE = Path(__file__).parent.parent.parent / "assets" / "fonts" / "cairo"
 
-# Noto Naskh Arabic — used for ALL Arabic text rendering (complete glyph coverage)
+# True when Pillow is built with libraqm — handles Arabic shaping natively
+HAS_RAQM: bool = pil_features.check_feature("raqm")
+
+# Noto Naskh Arabic — complete glyph coverage for both RAQM and non-RAQM paths
 ARABIC_FONTS = {
-    "black":   str(_NOTO_BASE / "NotoNaskhArabic-Bold.ttf"),   # no black weight, use bold
+    "black":   str(_NOTO_BASE / "NotoNaskhArabic-Bold.ttf"),
     "bold":    str(_NOTO_BASE / "NotoNaskhArabic-Bold.ttf"),
     "medium":  str(_NOTO_BASE / "NotoNaskhArabic-Regular.ttf"),
     "regular": str(_NOTO_BASE / "NotoNaskhArabic-Regular.ttf"),
     "light":   str(_NOTO_BASE / "NotoNaskhArabic-Regular.ttf"),
 }
 
-# Thmanyah — used for Latin/English text only
+# Thmanyah — Latin/English text only
 FONTS = {
     "black":   str(_FONT_BASE / "thmanyahsans-Black.otf"),
     "bold":    str(_FONT_BASE / "thmanyahsans-Bold.otf"),
@@ -46,7 +48,7 @@ FONTS = {
 
 
 def verify_fonts() -> dict:
-    results = {}
+    results = {"raqm_available": HAS_RAQM}
     for weight, path in {**FONTS, **{"ar_" + k: v for k, v in ARABIC_FONTS.items()}}.items():
         if os.path.exists(path):
             try:
@@ -71,20 +73,54 @@ def get_font(weight: str, size: int) -> ImageFont.FreeTypeFont:
 
 
 def get_arabic_font(weight: str, size: int) -> ImageFont.FreeTypeFont:
-    """Arabic font (Noto Naskh Arabic) — complete presentation form glyph coverage."""
+    """Arabic font — RAQM layout engine when available, standard otherwise."""
     path = ARABIC_FONTS.get(weight, ARABIC_FONTS["bold"])
     if os.path.exists(path):
         try:
+            if HAS_RAQM:
+                return ImageFont.truetype(path, size, layout_engine=ImageFont.Layout.RAQM)
             return ImageFont.truetype(path, size)
         except Exception:
             pass
-    # fallback to Thmanyah then default
     return get_font(weight, size)
 
 
 def reshape_arabic(text: str) -> str:
+    """Manual reshape — only used when RAQM is NOT available."""
     reshaped = arabic_reshaper.reshape(text)
     return get_display(reshaped)
+
+
+def _arabic_text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> int:
+    """Measure Arabic text width using the correct path for RAQM vs non-RAQM."""
+    if HAS_RAQM:
+        bbox = draw.textbbox((0, 0), text, font=font, direction="rtl", language="ar")
+    else:
+        bbox = draw.textbbox((0, 0), reshape_arabic(text), font=font)
+    return bbox[2] - bbox[0]
+
+
+def _draw_arabic(
+    draw: ImageDraw.ImageDraw,
+    right_x: int,
+    y: int,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    fill: tuple,
+) -> None:
+    """
+    Draw Arabic text right-aligned at right_x.
+    RAQM path: raw text + direction='rtl', anchor='ra' (right ascender).
+    Non-RAQM path: manual reshape + bidi, draw from (right_x - width).
+    """
+    if HAS_RAQM:
+        draw.text((right_x, y), text, font=font, fill=fill,
+                  direction="rtl", language="ar", anchor="ra")
+    else:
+        shaped = reshape_arabic(text)
+        bbox = draw.textbbox((0, 0), shaped, font=font)
+        lw = bbox[2] - bbox[0]
+        draw.text((right_x - lw, y), shaped, font=font, fill=fill)
 
 
 def wrap_arabic_text(text: str, font: ImageFont.FreeTypeFont, max_width: int,
@@ -94,9 +130,7 @@ def wrap_arabic_text(text: str, font: ImageFont.FreeTypeFont, max_width: int,
     current: list[str] = []
     for word in words:
         test = " ".join(current + [word])
-        shaped = reshape_arabic(test)
-        bbox = draw.textbbox((0, 0), shaped, font=font)
-        if bbox[2] - bbox[0] <= max_width:
+        if _arabic_text_width(draw, test, font) <= max_width:
             current.append(word)
         else:
             if current:
@@ -198,18 +232,14 @@ def composite_final_image(
     text_y  = cta_y - block_h - int(height * 0.03)
 
     for i, line in enumerate(ar_lines):
-        shaped = reshape_arabic(line)
-        bbox = draw.textbbox((0, 0), shaped, font=headline_font)
-        tw = bbox[2] - bbox[0]
-        x = right_edge - tw
         y = text_y + i * line_h
-        add_text_shadow(draw, (x, y), shaped, headline_font, (0, 0, 0, 170), 3)
-        draw.text((x, y), shaped, font=headline_font, fill=(255, 255, 255, 255))
+        _draw_arabic(draw, right_edge, y, line, headline_font, (0, 0, 0, 160))  # shadow
+        _draw_arabic(draw, right_edge - 2, y - 2, line, headline_font, (255, 255, 255, 255))
 
     # ── 5. English subhead (optional) ──────────────────────────────────────
     if copy_en.strip():
         sub_size = max(26, int(width * 0.028))
-        sub_font = get_font("regular", sub_size)  # Thmanyah fine for Latin
+        sub_font = get_font("regular", sub_size)
         sub_text = copy_en[:90]
         sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
         sub_x = right_edge - (sub_bbox[2] - sub_bbox[0])
@@ -220,9 +250,7 @@ def composite_final_image(
     if cta_ar.strip():
         cta_size = max(28, int(width * 0.033))
         cta_font = get_arabic_font("bold", cta_size)
-        cta_shaped = reshape_arabic(cta_ar)
-        cb = draw.textbbox((0, 0), cta_shaped, font=cta_font)
-        cta_tw = cb[2] - cb[0]
+        cta_tw = _arabic_text_width(draw, cta_ar, cta_font)
         pill_pad = int(width * 0.035)
         pill_w = cta_tw + pill_pad * 2
         pill_x = right_edge - pill_w
@@ -231,9 +259,9 @@ def composite_final_image(
             radius=cta_h // 2,
             fill=(*primary_rgb, 245),
         )
-        tx = pill_x + (pill_w - cta_tw) // 2
-        ty = cta_y + (cta_h - (cb[3] - cb[1])) // 2
-        draw.text((tx, ty), cta_shaped, font=cta_font, fill=(255, 255, 255, 255))
+        cta_text_x = pill_x + pill_pad
+        cta_text_y = cta_y + (cta_h - cta_size) // 2
+        _draw_arabic(draw, cta_text_x + cta_tw, cta_text_y, cta_ar, cta_font, (255, 255, 255, 255))
 
     # ── 7. Brand accent bar — bottom 4px ───────────────────────────────────
     draw.rectangle([(0, height - 4), (width, height)], fill=(*accent_rgb, 220))
@@ -321,18 +349,14 @@ def composite_premium_arabic(
     right_edge = tx + tw - padding_x
 
     for i, line in enumerate(ar_lines):
-        shaped = reshape_arabic(line)
-        bbox = draw.textbbox((0, 0), shaped, font=headline_font)
-        lw = bbox[2] - bbox[0]
-        x = right_edge - lw
         y = text_start_y + i * line_h
-        draw.text((x + 2, y + 4), shaped, font=headline_font, fill=(0, 0, 0, 85))
-        draw.text((x, y), shaped, font=headline_font, fill=(255, 255, 255, 255))
+        _draw_arabic(draw, right_edge, y + 4, line, headline_font, (0, 0, 0, 85))   # shadow
+        _draw_arabic(draw, right_edge, y, line, headline_font, (255, 255, 255, 255))
 
     body_y = text_start_y + block_h + int(headline_size * 0.4)
     if copy_en.strip() and body_y < ty + th_zone - int(th_zone * 0.15):
         body_size = max(24, int(width * 0.026))
-        body_font = get_font("regular", body_size)  # Thmanyah fine for Latin
+        body_font = get_font("regular", body_size)
         body_text = copy_en[:80]
         body_bbox = draw.textbbox((0, 0), body_text, font=body_font)
         bx = right_edge - (body_bbox[2] - body_bbox[0])
@@ -342,9 +366,7 @@ def composite_premium_arabic(
     if cta_ar.strip():
         cta_size = max(26, int(width * 0.030))
         cta_font = get_arabic_font("bold", cta_size)
-        cta_shaped = reshape_arabic(cta_ar)
-        cb = draw.textbbox((0, 0), cta_shaped, font=cta_font)
-        cta_tw_px = cb[2] - cb[0]
+        cta_tw_px = _arabic_text_width(draw, cta_ar, cta_font)
         pill_pad = int(width * 0.032)
         pill_w = cta_tw_px + pill_pad * 2
         pill_h = int(cta_size * 1.8)
@@ -355,9 +377,9 @@ def composite_premium_arabic(
             radius=pill_h // 2,
             fill=(*accent_rgb, 240),
         )
-        tx_pill = pill_x + (pill_w - cta_tw_px) // 2
-        ty_pill = cta_zone_y + (pill_h - (cb[3] - cb[1])) // 2
-        draw.text((tx_pill, ty_pill), cta_shaped, font=cta_font, fill=(20, 20, 20, 255))
+        cta_text_x = pill_x + pill_pad
+        cta_text_y = cta_zone_y + (pill_h - cta_size) // 2
+        _draw_arabic(draw, cta_text_x + cta_tw_px, cta_text_y, cta_ar, cta_font, (20, 20, 20, 255))
 
     final = img.convert("RGB")
     buf = BytesIO()
