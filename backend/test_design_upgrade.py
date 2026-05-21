@@ -1,10 +1,12 @@
 import asyncio
+from pathlib import Path
 
 from app.tools.image_tools import composite_premium_arabic
 from app.tools.qa_tools import run_final_qa_gate, run_image_qa_gate
 
 
 async def test_therapia_instagram_post():
+    Path("backend/test_output").mkdir(parents=True, exist_ok=True)
     bg_bytes = open("backend/test_assets/therapia_bg_test.jpg", "rb").read()
 
     bg_qa = await run_image_qa_gate(bg_bytes, min_aesthetic=5.0)
