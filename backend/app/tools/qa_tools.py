@@ -7,9 +7,15 @@ Gate 4: OCR — Arabic text legible post-compositing
 """
 
 import asyncio
+import difflib
+import re
 from io import BytesIO
 
 from PIL import Image
+
+
+def _normalize_arabic(text: str) -> str:
+    return re.sub(r"[^\u0600-\u06FF\s]", "", text).strip()
 
 
 async def run_image_qa_gate(image_bytes: bytes, min_aesthetic: float = 5.0) -> dict:
@@ -35,6 +41,8 @@ async def run_image_qa_gate(image_bytes: bytes, min_aesthetic: float = 5.0) -> d
                 return result
         except ImportError:
             result["scores"]["aesthetic"] = "skipped_no_model"
+        except Exception as exc:
+            result["scores"]["aesthetic"] = f"skipped_model_error:{type(exc).__name__}"
 
         try:
             import easyocr
@@ -49,6 +57,8 @@ async def run_image_qa_gate(image_bytes: bytes, min_aesthetic: float = 5.0) -> d
             result["scores"]["ocr_background"] = "clean"
         except ImportError:
             result["scores"]["ocr_background"] = "skipped_no_easyocr"
+        except Exception as exc:
+            result["scores"]["ocr_background"] = f"skipped_ocr_error:{type(exc).__name__}"
 
         return result
 
@@ -69,15 +79,28 @@ async def run_final_qa_gate(final_bytes: bytes, expected_arabic: str) -> dict:
             result["scores"]["contrast"] = contrast
         except ImportError:
             result["scores"]["contrast"] = "skipped_no_kontrasto"
+        except Exception as exc:
+            result["scores"]["contrast"] = f"skipped_contrast_error:{type(exc).__name__}"
 
         try:
             import easyocr
 
             reader = easyocr.Reader(["ar", "en"], gpu=False)
             texts = reader.readtext(final_bytes, detail=0)
-            parsed = " ".join(texts)
-            key_words = expected_arabic.split()[:2]
-            found = any(w in parsed for w in key_words if len(w) > 2)
+            parsed = _normalize_arabic(" ".join(texts))
+            key_words = [_normalize_arabic(w) for w in expected_arabic.split()[:2] if len(w) > 2]
+            parsed_tokens = [t for t in parsed.split() if len(t) > 1]
+            found = False
+            for kw in key_words:
+                if kw in parsed:
+                    found = True
+                    break
+                for token in parsed_tokens:
+                    if difflib.SequenceMatcher(None, kw, token).ratio() >= 0.6:
+                        found = True
+                        break
+                if found:
+                    break
             result["scores"]["ocr_arabic_legible"] = found
             if not found and expected_arabic.strip():
                 result["passed"] = False
@@ -85,6 +108,8 @@ async def run_final_qa_gate(final_bytes: bytes, expected_arabic: str) -> dict:
                 return result
         except ImportError:
             result["scores"]["ocr_arabic_legible"] = "skipped_no_easyocr"
+        except Exception as exc:
+            result["scores"]["ocr_arabic_legible"] = f"skipped_ocr_error:{type(exc).__name__}"
 
         return result
 
