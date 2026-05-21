@@ -3,10 +3,15 @@ Image tools — Layer 2 of the design pipeline.
 
 Architecture (non-negotiable):
   Layer 1: fal.ai generates BEAUTIFUL VISUAL SCENE — no text, no Arabic
-  Layer 2: Pillow overlays ALL text using Thmanyah font with proper RTL
+  Layer 2: Pillow overlays ALL text using Noto Naskh Arabic + arabic_reshaper
 
-fal.ai cannot render Arabic. Never ask it to.
-Pillow handles all text: Arabic headlines, English subheads, CTA buttons.
+WHY Noto Naskh Arabic instead of Thmanyah for Arabic text:
+  Thmanyah is an OpenType font designed for HarfBuzz/CoreText rendering engines.
+  PIL uses raw glyph lookup — it cannot execute OpenType GSUB shaping rules.
+  Thmanyah is missing 8+ critical Arabic presentation form codepoints (U+FE70-FEFF)
+  that arabic_reshaper produces, causing blank squares in rendered text.
+  Noto Naskh Arabic has complete presentation form coverage (141 glyphs) — zero missing.
+  Thmanyah still used for Latin/English subheads where it renders correctly.
 """
 import asyncio
 import io
@@ -18,9 +23,19 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-# ── Font paths ────────────────────────────────────────────────────────────────
 _FONT_BASE = Path(__file__).parent.parent.parent / "assets" / "fonts" / "thmanyah typeface" / "thmanyahsans" / "otf"
+_NOTO_BASE = Path(__file__).parent.parent.parent / "assets" / "fonts" / "cairo"
 
+# Noto Naskh Arabic — used for ALL Arabic text rendering (complete glyph coverage)
+ARABIC_FONTS = {
+    "black":   str(_NOTO_BASE / "NotoNaskhArabic-Bold.ttf"),   # no black weight, use bold
+    "bold":    str(_NOTO_BASE / "NotoNaskhArabic-Bold.ttf"),
+    "medium":  str(_NOTO_BASE / "NotoNaskhArabic-Regular.ttf"),
+    "regular": str(_NOTO_BASE / "NotoNaskhArabic-Regular.ttf"),
+    "light":   str(_NOTO_BASE / "NotoNaskhArabic-Regular.ttf"),
+}
+
+# Thmanyah — used for Latin/English text only
 FONTS = {
     "black":   str(_FONT_BASE / "thmanyahsans-Black.otf"),
     "bold":    str(_FONT_BASE / "thmanyahsans-Bold.otf"),
@@ -31,9 +46,8 @@ FONTS = {
 
 
 def verify_fonts() -> dict:
-    """Verify all Thmanyah fonts load correctly. Call at startup."""
     results = {}
-    for weight, path in FONTS.items():
+    for weight, path in {**FONTS, **{"ar_" + k: v for k, v in ARABIC_FONTS.items()}}.items():
         if os.path.exists(path):
             try:
                 ImageFont.truetype(path, 48)
@@ -46,6 +60,7 @@ def verify_fonts() -> dict:
 
 
 def get_font(weight: str, size: int) -> ImageFont.FreeTypeFont:
+    """Latin/English font (Thmanyah)."""
     path = FONTS.get(weight, FONTS["bold"])
     if os.path.exists(path):
         try:
@@ -53,6 +68,18 @@ def get_font(weight: str, size: int) -> ImageFont.FreeTypeFont:
         except Exception:
             pass
     return ImageFont.load_default(size=size)
+
+
+def get_arabic_font(weight: str, size: int) -> ImageFont.FreeTypeFont:
+    """Arabic font (Noto Naskh Arabic) — complete presentation form glyph coverage."""
+    path = ARABIC_FONTS.get(weight, ARABIC_FONTS["bold"])
+    if os.path.exists(path):
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    # fallback to Thmanyah then default
+    return get_font(weight, size)
 
 
 def reshape_arabic(text: str) -> str:
@@ -156,9 +183,9 @@ def composite_final_image(
         except Exception:
             pass
 
-    # ── 4. Arabic headline — RIGHT aligned ─────────────────────────────────
+    # ── 4. Arabic headline — RIGHT aligned, Noto Naskh Arabic ─────────────
     headline_size = max(52, int(width * 0.060))
-    headline_font = get_font("black", headline_size)
+    headline_font = get_arabic_font("bold", headline_size)
     max_text_width = width - (padding * 2)
 
     ar_lines = wrap_arabic_text(copy_ar, headline_font, max_text_width, draw)
@@ -182,7 +209,7 @@ def composite_final_image(
     # ── 5. English subhead (optional) ──────────────────────────────────────
     if copy_en.strip():
         sub_size = max(26, int(width * 0.028))
-        sub_font = get_font("regular", sub_size)
+        sub_font = get_font("regular", sub_size)  # Thmanyah fine for Latin
         sub_text = copy_en[:90]
         sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
         sub_x = right_edge - (sub_bbox[2] - sub_bbox[0])
@@ -192,7 +219,7 @@ def composite_final_image(
     # ── 6. CTA pill button ─────────────────────────────────────────────────
     if cta_ar.strip():
         cta_size = max(28, int(width * 0.033))
-        cta_font = get_font("bold", cta_size)
+        cta_font = get_arabic_font("bold", cta_size)
         cta_shaped = reshape_arabic(cta_ar)
         cb = draw.textbbox((0, 0), cta_shaped, font=cta_font)
         cta_tw = cb[2] - cb[0]
@@ -281,7 +308,7 @@ def composite_premium_arabic(
     padding_y = int(th_zone * 0.10)
 
     headline_size = _calc_headline_size(copy_ar, width)
-    headline_font = get_font("black", headline_size)
+    headline_font = get_arabic_font("bold", headline_size)
     max_text_w = tw - padding_x * 2
 
     ar_lines = wrap_arabic_text(copy_ar, headline_font, max_text_w, draw)
@@ -305,7 +332,7 @@ def composite_premium_arabic(
     body_y = text_start_y + block_h + int(headline_size * 0.4)
     if copy_en.strip() and body_y < ty + th_zone - int(th_zone * 0.15):
         body_size = max(24, int(width * 0.026))
-        body_font = get_font("regular", body_size)
+        body_font = get_font("regular", body_size)  # Thmanyah fine for Latin
         body_text = copy_en[:80]
         body_bbox = draw.textbbox((0, 0), body_text, font=body_font)
         bx = right_edge - (body_bbox[2] - body_bbox[0])
@@ -314,7 +341,7 @@ def composite_premium_arabic(
 
     if cta_ar.strip():
         cta_size = max(26, int(width * 0.030))
-        cta_font = get_font("bold", cta_size)
+        cta_font = get_arabic_font("bold", cta_size)
         cta_shaped = reshape_arabic(cta_ar)
         cb = draw.textbbox((0, 0), cta_shaped, font=cta_font)
         cta_tw_px = cb[2] - cb[0]
